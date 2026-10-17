@@ -438,45 +438,72 @@ export function calculateHardwareAndEconomics(
   if (config.optimizer === 'Muon') stability += 4;
   const stabilityScore = Math.min(99, Math.max(42, stability));
 
-  // Sub-scores (0-100 scale, calibrated with predictedIntelligenceIndex)
-  const baseSub = Math.min(92, Math.max(15, 20 + predictedIntelligenceIndex * 1.3));
+  // Sub-scores (0-100 scale, realistically conditioned on data exposure)
+  // If a model has 0% training data in a specialized domain, its performance in that domain collapses.
+  const mathDataTokens = m.math + m.syntheticCoT * 0.65 + m.science * 0.12 + m.webCrawl * 0.03;
+  const mathExposure = Math.min(1.0, mathDataTokens / 16.0);
+
+  const codeDataTokens = m.code + m.syntheticCoT * 0.45 + m.webCrawl * 0.04;
+  const codeExposure = Math.min(1.0, codeDataTokens / 20.0);
+
+  const scienceDataTokens = m.science + m.syntheticCoT * 0.45 + m.math * 0.2 + m.webCrawl * 0.15;
+  const scienceExposure = Math.min(1.0, scienceDataTokens / 14.0);
+
+  // Even without dedicated multilingual data, English/web models have slight cross-lingual transfer (~6%)
+  const multiDataTokens = m.multilingual + m.webCrawl * 0.25;
+  const multiExposure = Math.min(1.0, (m.multilingual > 0 ? 0.15 : 0.06) + multiDataTokens / 12.0);
+
+  // Multimodal Vision strictly requires interleaved multimodal visual tokens (images/videos)
+  // Text-only models without vision tokens cannot process visual inputs (0.0% vision capability)
+  const mmExposure = m.multimodal > 0 ? Math.min(1.0, Math.pow(m.multimodal / 7.0, 0.75)) : 0.0;
+
+  // Long-context scales with sequence window size (8K baseline up to 1M+)
+  const contextExposure = Math.min(
+    1.0,
+    Math.max(0.12, (Math.log10(Math.max(8, config.contextWindowK)) - Math.log10(8)) / (Math.log10(1000) - Math.log10(8)))
+  );
+
+  // Theoretical ceiling based on model capacity and overall Intelligence Index
+  const potentialCeiling = Math.min(99.0, Math.max(25.0, 28.0 + predictedIntelligenceIndex * 1.2));
+
+  // RLVR reasoning bonus requires baseline exposure to the domain's syntax/logic to be effective
+  const mathScore = mathExposure > 0.01
+    ? Math.min(99.2, potentialCeiling * Math.pow(mathExposure, 1.15) + gatedRlvrBonus * 0.65 * mathExposure)
+    : 0.0;
+
+  const codeScore = codeExposure > 0.01
+    ? Math.min(99.0, potentialCeiling * Math.pow(codeExposure, 1.15) + gatedRlvrBonus * 0.55 * codeExposure)
+    : 0.0;
+
+  const scienceScore = scienceExposure > 0.01
+    ? Math.min(98.5, potentialCeiling * Math.pow(scienceExposure, 1.1))
+    : 0.0;
+
+  const longContextScore = Math.min(
+    99.0,
+    Math.max(
+      8.0,
+      potentialCeiling * (0.35 + contextExposure * 0.65) +
+      (config.attention === 'MLA' ? 5.5 : config.attention === 'GQA' ? 2.5 : -3.0)
+    )
+  );
+
+  const multilingualScore = Math.min(
+    98.0,
+    potentialCeiling * multiExposure
+  );
+
+  const multimodalScore = mmExposure > 0
+    ? Math.min(98.5, potentialCeiling * mmExposure)
+    : 0.0;
+
   const subScores = {
-    math: Number(
-      Math.min(
-        99.2,
-        Math.max(12, baseSub + (m.math - 14) * 0.55 + gatedRlvrBonus * 0.65)
-      ).toFixed(1)
-    ),
-    coding: Number(
-      Math.min(
-        99.0,
-        Math.max(12, baseSub + (m.code - 18) * 0.52 + gatedRlvrBonus * 0.55)
-      ).toFixed(1)
-    ),
-    science: Number(
-      Math.min(
-        98.5,
-        Math.max(12, baseSub + (m.science - 12) * 0.58 + m.syntheticCoT * 0.25 * reasoningCapacityFactor)
-      ).toFixed(1)
-    ),
-    longContext: Number(
-      Math.min(
-        99.0,
-        Math.max(
-          12,
-          baseSub -
-          6 +
-          Math.log10(Math.max(8, config.contextWindowK)) * 4.5 +
-          (config.attention === 'MLA' ? 5.5 : config.attention === 'GQA' ? 2.5 : -3.0)
-        )
-      ).toFixed(1)
-    ),
-    multilingual: Number(
-      Math.min(98.0, Math.max(12, baseSub + (m.multilingual - 10) * 0.62)).toFixed(1)
-    ),
-    multimodal: Number(
-      Math.min(98.5, Math.max(10, baseSub - 4 + (m.multimodal - 8) * 0.85)).toFixed(1)
-    ),
+    math: Number(mathScore.toFixed(1)),
+    coding: Number(codeScore.toFixed(1)),
+    science: Number(scienceScore.toFixed(1)),
+    longContext: Number(longContextScore.toFixed(1)),
+    multilingual: Number(multilingualScore.toFixed(1)),
+    multimodal: Number(multimodalScore.toFixed(1)),
   };
 
   return {

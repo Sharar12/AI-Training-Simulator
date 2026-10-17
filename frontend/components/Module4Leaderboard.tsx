@@ -1320,7 +1320,7 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
                 />
                 <PolarRadiusAxis
                   angle={30}
-                  domain={[10, 100]}
+                  domain={[0, 100]}
                   tick={{ fill: '#64748b', fontSize: 10 }}
                 />
                 <Radar

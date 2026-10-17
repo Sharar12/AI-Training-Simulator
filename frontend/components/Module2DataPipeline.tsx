@@ -473,20 +473,29 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
                 { label: 'Long-Context Recall (RULER 1M)', val: econ.subScores.longContext, color: 'bg-amber-400' },
                 { label: 'Multilingual MMLU-Pro', val: econ.subScores.multilingual, color: 'bg-pink-400' },
                 { label: 'Multimodal Vision (MMMU-Pro)', val: econ.subScores.multimodal, color: 'bg-indigo-400' },
-              ].map((b) => (
-                <div key={b.label}>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-slate-300">{b.label}</span>
-                    <span className="text-white font-bold">{b.val}%</span>
+              ].map((b) => {
+                const isZero = b.val === 0;
+                return (
+                  <div key={b.label}>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-slate-300">{b.label}</span>
+                      <span className={`font-bold ${isZero ? 'text-slate-500' : 'text-white'}`}>
+                        {isZero
+                          ? b.label.includes('Multimodal')
+                            ? '0.0% (Text-Only)'
+                            : '0.0% (No Domain Data)'
+                          : `${b.val}%`}
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-950 overflow-hidden">
+                      <div
+                        className={`${b.color} h-full rounded-full transition-all duration-300`}
+                        style={{ width: `${Math.min(100, b.val)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-slate-950 overflow-hidden">
-                    <div
-                      className={`${b.color} h-full rounded-full transition-all duration-300`}
-                      style={{ width: `${Math.min(100, b.val)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
