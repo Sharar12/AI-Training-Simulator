@@ -1125,7 +1125,7 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
           </span>
           <span className="text-[10px] text-slate-400 block">
             {liveUserModel.intelligenceIndex > 58.0
-              ? 'New #1 World Record!'
+              ? `New #1 Record (+${(liveUserModel.intelligenceIndex - 58.0).toFixed(1)} pts above Claude Opus 5.5)`
               : `${(58.0 - liveUserModel.intelligenceIndex).toFixed(1)} pts behind Claude Opus 5.5 (Max)`}
           </span>
         </div>
@@ -1191,7 +1191,7 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
                 <SettingTooltip id="scatterAxisMode" />
               </h3>
               <p className="text-[11px] font-mono text-slate-400">
-                Y-Axis: AA Intelligence Index (Calibrated 0 – 62) • Cyan Star = Your Model
+                Y-Axis: AA Intelligence Index (Dynamic Scale up to 100.0) • Cyan Star = Your Model
               </p>
             </div>
 
@@ -1235,7 +1235,7 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
                   type="number"
                   dataKey="intelligenceIndex"
                   name="AA Intelligence Index"
-                  domain={[0, 62]}
+                  domain={[0, (dataMax: number) => Math.max(65, Math.ceil((dataMax + 4) / 5) * 5)]}
                   stroke="#94a3b8"
                   tick={{ fill: '#94a3b8', fontSize: 11 }}
                 />

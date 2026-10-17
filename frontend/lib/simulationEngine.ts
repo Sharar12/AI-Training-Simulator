@@ -468,9 +468,9 @@ export function calculateHardwareAndEconomics(
     contaminationPenalty +
     eventBonusIndex;
 
-  // Calibrated accurately: Top frontier models score ~57-58.5, compact sub-1B edge models score ~4-8, ultra 1000T models scale up to ~65
+  // Calibrated accurately: Current 2024-2025 frontier models score ~50-58, next-gen 10T models score ~70-75, and ultra 1,000T clusters scale up to 100.0 (Superintelligence benchmark ceiling)
   const predictedIntelligenceIndex = Number(
-    Math.min(65.0, Math.max(4.0, rawIndex)).toFixed(1)
+    Math.min(100.0, Math.max(4.0, rawIndex)).toFixed(1)
   );
 
   // Output Speed (tok/s)
@@ -556,7 +556,7 @@ export function calculateHardwareAndEconomics(
   );
 
   // Theoretical ceiling based on model capacity and overall Intelligence Index
-  const potentialCeiling = Math.min(99.0, Math.max(25.0, 28.0 + predictedIntelligenceIndex * 1.2));
+  const potentialCeiling = Math.min(99.5, Math.max(25.0, 20.0 + predictedIntelligenceIndex * 0.82));
 
   // RLVR reasoning bonus requires baseline exposure to the domain's syntax/logic to be effective
   const mathScore = mathExposure > 0.01
