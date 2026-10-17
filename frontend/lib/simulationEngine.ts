@@ -1,6 +1,7 @@
 import {
   SimulatorConfig,
   EconomicsBreakdown,
+  HardwareProcurementBreakdown,
   PrecisionType,
   OptimizerType,
   RlvrEffortType,
@@ -123,9 +124,11 @@ export function calculateHardwareAndEconomics(
   const effectiveRatio =
     config.paradigm === 'Dense'
       ? 1.0
-      : config.paradigm === 'Sparse MoE'
-        ? Math.max(0.02, Math.min(1.0, config.activeParamRatio))
-        : Math.max(0.15, Math.min(1.0, config.activeParamRatio * 0.85));
+      : config.paradigm === 'DeepSeek-V3 MoE'
+        ? Math.max(0.02, Math.min(1.0, config.activeParamRatio)) // Fine-grained 256 micro-experts (8 routed + 1 shared)
+        : config.paradigm === 'Sparse MoE'
+          ? Math.max(0.02, Math.min(1.0, config.activeParamRatio))
+          : Math.max(0.15, Math.min(1.0, config.activeParamRatio * 0.85));
 
   const activeParamsB = Number((config.totalParamsB * effectiveRatio).toFixed(2));
   const totalParamsB = config.totalParamsB;
@@ -138,6 +141,8 @@ export function calculateHardwareAndEconomics(
     FP8: 1.0,
     INT8: 1.0,
     INT4: 0.5,
+    'Ternary 1.58b': 0.20, // 1.58 bits per param (BitNet b1.58 integer weights)
+    'Bonsai 1-bit': 0.14,  // 1-bit per param + FP16 bundle scale factor (PrismML)
   };
   const gradBytesMap: Record<PrecisionType, number> = {
     FP32: 4.0,
@@ -146,6 +151,8 @@ export function calculateHardwareAndEconomics(
     FP8: 2.0, // Master gradients in BF16
     INT8: 2.0,
     INT4: 2.0,
+    'Ternary 1.58b': 1.0, // Mixed INT8/BF16 master gradient accumulation
+    'Bonsai 1-bit': 1.0,
   };
   const optBytesMap: Record<OptimizerType, number> = {
     AdamW: 12.0, // FP32 master weights (4B) + m (4B) + v (4B)
@@ -159,8 +166,13 @@ export function calculateHardwareAndEconomics(
 
   // Attention KV & Activation scaling factor
   const attnMemoryFactor =
-    config.attention === 'MHA' ? 1.0 : config.attention === 'GQA' ? 0.32 : 0.16;
-  const paradigmKvFactor = config.paradigm === 'Hybrid Mamba-Transformer' ? 0.55 : 1.0;
+    config.attention === 'MLA' ? 0.16 : config.attention === 'GQA' ? 0.32 : 1.0;
+  const paradigmKvFactor =
+    config.paradigm === 'DeepSeek-V3 MoE'
+      ? 0.22 // Native low-rank MLA KV compression
+      : config.paradigm === 'Hybrid Mamba-Transformer'
+        ? 0.55
+        : 1.0;
 
   // B. Hardware Required TO TRAIN
   const rawModelStateGB =
@@ -203,7 +215,11 @@ export function calculateHardwareAndEconomics(
 
   // Effective GPU TFLOPs based on precision
   const peakGpuTflops =
-    config.precision === 'FP8' || config.precision === 'INT4' || config.precision === 'INT8'
+    config.precision === 'FP8' ||
+    config.precision === 'INT4' ||
+    config.precision === 'INT8' ||
+    config.precision === 'Ternary 1.58b' ||
+    config.precision === 'Bonsai 1-bit'
       ? gpu.fp8Tflops
       : config.precision === 'FP32'
         ? gpu.bf16Tflops * 0.5
@@ -213,6 +229,7 @@ export function calculateHardwareAndEconomics(
   let baseMfu = 0.46;
   if (config.gpuType === 'B200') baseMfu += 0.05;
   if (config.paradigm === 'Sparse MoE') baseMfu -= 0.035; // All-to-All EP dispatch overhead
+  if (config.paradigm === 'DeepSeek-V3 MoE') baseMfu += 0.04; // DualPipe compute-communication overlap + native MLA
   if (config.attention === 'MLA') baseMfu += 0.025;
   if (config.optimizer === 'Muon') baseMfu += 0.015;
   if (config.gpuCount > 32768) baseMfu -= 0.03;
@@ -279,6 +296,37 @@ export function calculateHardwareAndEconomics(
     postTrainingCostUSD +
     powerCoolingCostUSD;
 
+  // Hardware Procurement Strategy: Cloud On-Demand Rental vs. Owned Hardware CapEx & Depreciation
+  const cloudRentalHourlyUSD = config.gpuCount * gpu.hourlyRateUSD;
+  const cloudRentalTotalUSD = totalGpuHours * gpu.hourlyRateUSD;
+
+  // Owned Hardware: Direct purchase cost for GPU cluster
+  const ownedHardwareCapExUSD = config.gpuCount * gpu.purchaseCostUSD;
+  // 3-Year (36-month / 26,280 hours) linear depreciation + 18% datacenter colocation, networking & maintenance overhead
+  const ownedDepreciatedHourlyUSD =
+    config.gpuCount * ((gpu.purchaseCostUSD / 26280) * 1.18);
+  // Total cost to run this specific training run on owned hardware:
+  // (trainingHours * ownedDepreciatedHourlyUSD) + power & cooling
+  const ownedHardwareTotalUSD =
+    trainingHours * ownedDepreciatedHourlyUSD + powerCoolingCostUSD;
+  const ownedSavingsUSD = cloudRentalTotalUSD - ownedHardwareTotalUSD;
+
+  // Breakeven point in continuous cluster running hours:
+  const hourlyMargin = Math.max(0.01, cloudRentalHourlyUSD - (ownedDepreciatedHourlyUSD / 1.18));
+  const breakevenTrainingHours = Math.round(ownedHardwareCapExUSD / hourlyMargin);
+  const breakevenMonths = Number((breakevenTrainingHours / 730).toFixed(1));
+
+  const procurement: HardwareProcurementBreakdown = {
+    cloudRentalHourlyUSD,
+    cloudRentalTotalUSD,
+    ownedHardwareCapExUSD,
+    ownedDepreciatedHourlyUSD,
+    ownedHardwareTotalUSD,
+    ownedSavingsUSD,
+    breakevenTrainingHours,
+    breakevenMonths,
+  };
+
   // C. Hardware Required TO RUN / INFERENCE (Deployment & Self-Hosting Specs)
   const inferenceWeightGB = totalParamsB * weightBytesPerParam;
   // KV-Cache VRAM scales with Context Window & MHA/GQA/MLA
@@ -338,18 +386,24 @@ export function calculateHardwareAndEconomics(
         ? 1.0
         : config.precision === 'FP8' || config.precision === 'INT8'
           ? 0.58
-          : 0.36;
+          : config.precision === 'INT4'
+            ? 0.36
+            : config.precision === 'Ternary 1.58b'
+              ? 0.22 // MatMul-free integer arithmetic slashes inference serving costs
+              : 0.16; // Bonsai 1-bit bundle quantization cache-streaming
   const contextPriceFactor = 1.0 + Math.max(0, (config.contextWindowK - 128) / 2000) * attnMemoryFactor;
   const rawInputPrice =
     (0.04 + Math.pow(activeParamsB, 0.78) * 0.026) * quantPriceFactor * contextPriceFactor;
   const inputTokenPricePer1M = Number(Math.max(0.04, rawInputPrice).toFixed(2));
 
   const decodeMultiplier =
-    config.paradigm === 'Sparse MoE'
-      ? 3.8 + (totalParamsB / Math.max(1, activeParamsB)) * 0.04
-      : config.paradigm === 'Hybrid Mamba-Transformer'
-        ? 3.4
-        : 4.5;
+    config.paradigm === 'DeepSeek-V3 MoE'
+      ? 2.1 // Multi-Token Prediction (MTP) speculative self-decoding slashes generation costs
+      : config.paradigm === 'Sparse MoE'
+        ? 3.8 + (totalParamsB / Math.max(1, activeParamsB)) * 0.04
+        : config.paradigm === 'Hybrid Mamba-Transformer'
+          ? 3.4
+          : 4.5;
   const outputTokenPricePer1M = Number(
     Math.max(0.15, inputTokenPricePer1M * Math.min(5.2, decodeMultiplier)).toFixed(2)
   );
@@ -376,7 +430,6 @@ export function calculateHardwareAndEconomics(
     ).toFixed(4)
   );
 
-  // E. Chinchilla Optimality & Intelligence Index Prediction
   // E. Chinchilla Optimality & Intelligence Index Prediction
   // Optimal tokens:
   // For Dense: 20 tokens per parameter
@@ -407,14 +460,17 @@ export function calculateHardwareAndEconomics(
 
   // Architecture Paradigm bonus / trade-off:
   // - Dense Transformer: +1.6 bonus (full parameter update per token, zero routing noise, peak representation density)
+  // - DeepSeek-V3 MoE: +0.85 bonus (Multi-Token Prediction creates denser training supervisory signal, 256 fine-grained micro-experts)
   // - Sparse MoE: 0.0 baseline (heavily conditioned on active parameter ratio)
   // - Hybrid Mamba-Attn: -0.9 on complex multi-hop reasoning due to linear state compression, but gives +32% tok/s boost
   const paradigmDelta =
     config.paradigm === 'Dense'
       ? 1.6
-      : config.paradigm === 'Sparse MoE'
-        ? 0.0
-        : -0.9;
+      : config.paradigm === 'DeepSeek-V3 MoE'
+        ? 0.85
+        : config.paradigm === 'Sparse MoE'
+          ? 0.0
+          : -0.9;
 
   // Token scaling contribution
   let tokenDelta = 0;
@@ -441,7 +497,11 @@ export function calculateHardwareAndEconomics(
         ? 0.0
         : config.precision === 'FP8' || config.precision === 'INT8'
           ? -0.6
-          : -3.5; // INT4 quantization degradation
+          : config.precision === 'Ternary 1.58b'
+            ? -0.85 // BitNet b1.58 preserves near-FP16 quality with minimal loss
+            : config.precision === 'Bonsai 1-bit'
+              ? -1.85 // PrismML Bonsai preserves ~92% accuracy in 1-bit bundle mode
+              : -3.5; // INT4 quantization degradation
   const optimizerDelta =
     config.optimizer === 'Muon' ? 0.85 : config.optimizer === 'Lion' ? 0.35 : 0.0;
   const attnDelta =
@@ -486,19 +546,25 @@ export function calculateHardwareAndEconomics(
 
   // Output Speed (tok/s)
   const quantSpeedBoost =
-    config.precision === 'INT4'
-      ? 2.15
-      : config.precision === 'FP8' || config.precision === 'INT8'
-        ? 1.68
-        : config.precision === 'BF16' || config.precision === 'FP16'
-          ? 1.0
-          : 0.52;
+    config.precision === 'Bonsai 1-bit'
+      ? 4.45 // Stream directly from L2/L3 cache without memory bus saturation
+      : config.precision === 'Ternary 1.58b'
+        ? 3.85 // MatMul-free integer additions bypass floating-point ALUs
+        : config.precision === 'INT4'
+          ? 2.15
+          : config.precision === 'FP8' || config.precision === 'INT8'
+            ? 1.68
+            : config.precision === 'BF16' || config.precision === 'FP16'
+              ? 1.0
+              : 0.52;
   const paradigmSpeedBoost =
-    config.paradigm === 'Hybrid Mamba-Transformer'
-      ? 1.32
-      : config.paradigm === 'Sparse MoE'
-        ? 1.18
-        : 1.0;
+    config.paradigm === 'DeepSeek-V3 MoE'
+      ? 1.75 // Multi-Token Prediction (MTP) speculative decode + 8/256 sparsity
+      : config.paradigm === 'Hybrid Mamba-Transformer'
+        ? 1.32
+        : config.paradigm === 'Sparse MoE'
+          ? 1.18
+          : 1.0;
   const attnSpeedBoost =
     config.attention === 'MLA' ? 1.22 : config.attention === 'GQA' ? 1.08 : 0.88;
   const bwFactor = gpu.bandwidthTBps / 3.35;
@@ -537,7 +603,10 @@ export function calculateHardwareAndEconomics(
   if (config.precision === 'FP32') stability += 8;
   if (config.precision === 'FP8') stability -= 7;
   if (config.precision === 'INT4') stability -= 16;
+  if (config.precision === 'Ternary 1.58b') stability += 2; // Weight clipping & sign gradients prevent exploding activations
+  if (config.precision === 'Bonsai 1-bit') stability -= 6;
   if (config.paradigm === 'Sparse MoE') stability -= 5;
+  if (config.paradigm === 'DeepSeek-V3 MoE') stability += 3; // Auxiliary-loss-free load balancing prevents routing collapse
   if (config.optimizer === 'Muon') stability += 4;
   const stabilityScore = Math.min(99, Math.max(42, stability));
 
@@ -630,6 +699,7 @@ export function calculateHardwareAndEconomics(
     totalEnergyMWh,
     powerCoolingCostUSD,
     grandTotalBuildCostUSD,
+    procurement,
     weightBytesPerParam,
     gradBytesPerParam,
     optBytesPerParam,

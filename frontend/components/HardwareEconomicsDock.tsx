@@ -170,6 +170,16 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
                     {formatMoney(econ.powerCoolingCostUSD)} ({Math.round(econ.totalEnergyMWh).toLocaleString()} MWh)
                   </span>
                 </div>
+                <div className="mt-2 pt-1.5 border-t border-slate-800/70 space-y-1">
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-cyan-400 font-semibold">☁️ Cloud Rental:</span>
+                    <span className="text-cyan-200 font-bold">{formatMoney(econ.procurement.cloudRentalTotalUSD)} ({formatMoney(econ.procurement.cloudRentalHourlyUSD)}/hr)</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-purple-400 font-semibold">🏢 Owned CapEx:</span>
+                    <span className="text-amber-300 font-bold">{formatMoney(econ.procurement.ownedHardwareCapExUSD)} (Breakeven: {econ.procurement.breakevenMonths} Mo)</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">

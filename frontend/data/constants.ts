@@ -18,6 +18,7 @@ export const GPU_SPECS: Record<GpuType, GpuHardwareSpec> = {
     bandwidthTBps: 3.35,
     tdpWatts: 700,
     hourlyRateUSD: 2.65,
+    purchaseCostUSD: 32000,
     interconnect: 'NVLink 4 (900 GB/s)',
   },
   H200: {
@@ -29,6 +30,7 @@ export const GPU_SPECS: Record<GpuType, GpuHardwareSpec> = {
     bandwidthTBps: 4.8,
     tdpWatts: 700,
     hourlyRateUSD: 3.45,
+    purchaseCostUSD: 38000,
     interconnect: 'NVLink 4 (900 GB/s)',
   },
   B200: {
@@ -40,6 +42,7 @@ export const GPU_SPECS: Record<GpuType, GpuHardwareSpec> = {
     bandwidthTBps: 8.0,
     tdpWatts: 1000,
     hourlyRateUSD: 5.10,
+    purchaseCostUSD: 52000,
     interconnect: 'NVLink 5 (1.8 TB/s)',
   },
   TPUv6e: {
@@ -51,6 +54,7 @@ export const GPU_SPECS: Record<GpuType, GpuHardwareSpec> = {
     bandwidthTBps: 1.6,
     tdpWatts: 450,
     hourlyRateUSD: 1.85,
+    purchaseCostUSD: 18000,
     interconnect: 'ICI Optical 3D Torus',
   },
   Ascend910C: {
@@ -62,6 +66,7 @@ export const GPU_SPECS: Record<GpuType, GpuHardwareSpec> = {
     bandwidthTBps: 2.4,
     tdpWatts: 650,
     hourlyRateUSD: 2.05,
+    purchaseCostUSD: 22000,
     interconnect: 'HCCS Mesh',
   },
 };
@@ -93,13 +98,13 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
   },
   paradigm: {
     id: 'paradigm',
-    title: 'Architecture Paradigm (Dense vs. Sparse MoE vs. Hybrid)',
-    whatItIs: 'Defines how token representations route through feed-forward layers and sequence state blocks during prefill and decoding.',
-    increasingEffect: 'Switching to Sparse MoE or Hybrid Mamba-Transformer decouples total knowledge capacity from per-token FLOPs, boosting Output Speed (tok/s) by 2.2x–4.5x and slashing API cost.',
+    title: 'Architecture Paradigm (Dense vs. Sparse MoE vs. DeepSeek-V3 MoE vs. Hybrid)',
+    whatItIs: 'Defines how token representations route through feed-forward layers, expert routers, and sequence state blocks during prefill and decoding.',
+    increasingEffect: 'Selecting DeepSeek-V3 MoE (256 fine-grained micro-experts, DualPipe overlap, Multi-Token Prediction) or Sparse MoE decouples capacity from FLOPs, boosting Output Speed by 2.2x–4.5x and slashing serving cost.',
     increasingTags: [
-      { label: '+150% to +320% tok/s', tone: 'positive' },
+      { label: '+150% to +350% tok/s', tone: 'positive' },
       { label: '-65% FLOPs/tok', tone: 'positive' },
-      { label: '+Router Instability', tone: 'negative' },
+      { label: '+MTP Self-Speculation', tone: 'positive' },
     ],
     decreasingEffect: 'Using a monolithic Dense Transformer maximizes per-parameter utilization and training stability, but activates 100% of weights on every token.',
     decreasingTags: [
@@ -130,8 +135,8 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
   },
   activeParamRatio: {
     id: 'activeParamRatio',
-    title: 'MoE Active Parameter Ratio (Sparse MoE)',
-    whatItIs: 'Percentage of total parameters activated per token by the Top-K softmax router (plus shared experts) during forward/backward passes.',
+    title: 'MoE Active Parameter Ratio (Sparse & DeepSeek MoE)',
+    whatItIs: 'Percentage of total parameters activated per token by the Top-K router (plus shared experts). In DeepSeek-V3, ~37B active out of 671B (~5.5%).',
     increasingEffect: 'Improves per-token knowledge synthesis and dense reasoning, but increases FLOPs per token, lowers tok/s, and raises API Input/Output cost.',
     increasingTags: [
       { label: '+Per-Token Reasoning', tone: 'positive' },
@@ -182,8 +187,8 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
   },
   precision: {
     id: 'precision',
-    title: 'Precision / Quantization (FP32 / BF16 / FP8 / INT4)',
-    whatItIs: 'Numerical bit-width used to represent weights, activations, and KV caches during training and deployment.',
+    title: 'Precision / Quantization (BF16 / FP8 / INT4 / Ternary 1.58b / Bonsai 1-bit)',
+    whatItIs: 'Numerical bit-width representing weights & activations. BitNet Ternary 1.58b replaces MatMul with integer additions; Bonsai 1-bit bundles 128 weights per scale factor.',
     increasingEffect: 'Higher Precision (BF16/FP32) gives maximum numerical stability and zero quantization degradation, but requires 2x–4x more VRAM, Disk Space, and cluster cost.',
     increasingTags: [
       { label: '+Max Stability', tone: 'positive' },
@@ -191,12 +196,12 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
       { label: '+2x–4x VRAM & Disk', tone: 'negative' },
       { label: '+2x Compute Cost', tone: 'negative' },
     ],
-    decreasingEffect: 'Lower Precision (FP8/INT4) cuts Inference VRAM and Disk Space by 50%–75%, increases Output Speed by 1.5x–2.2x, reduces Input/Output API price, with a minor -0.4 to -1.5 point Intelligence penalty and higher gradient spike risk during training.',
+    decreasingEffect: 'Ultra-low quantization (Ternary 1.58b / Bonsai 1-bit) slashes weight footprint by 85%–93%, boosts decode speed up to 4.45x, and enables 70B models to run on 16GB laptops.',
     decreasingTags: [
-      { label: '-50% to -75% VRAM', tone: 'positive' },
-      { label: '+1.5x–2.2x tok/s', tone: 'positive' },
-      { label: '-0.4 to -1.5 AA Index', tone: 'negative' },
-      { label: '+Grad Spike Risk', tone: 'negative' },
+      { label: '-85% to -93% VRAM', tone: 'positive' },
+      { label: '+3.8x to +4.5x tok/s', tone: 'positive' },
+      { label: 'MatMul-Free Add/Sub', tone: 'positive' },
+      { label: '-0.8 to -1.8 AA Index', tone: 'negative' },
     ],
   },
   optimizer: {
@@ -512,6 +517,76 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
 };
 
 export const PRESET_BLUEPRINTS: { label: string; badge: string; config: SimulatorConfig }[] = [
+  {
+    label: 'DeepSeek-V3.2 MoE (256-Expert + MTP)',
+    badge: 'Peak Architecture Efficiency',
+    config: {
+      modelName: 'DeepSeek-V3.2 MoE (MTP)',
+      license: 'Open Weights',
+      paradigm: 'DeepSeek-V3 MoE',
+      totalParamsB: 671,
+      activeParamRatio: 0.055, // ~37B active out of 671B
+      attention: 'MLA',
+      contextWindowK: 128,
+      precision: 'FP8',
+      optimizer: 'Muon',
+      gpuType: 'H100',
+      gpuCount: 2048,
+      totalTokensT: 14.8,
+      trainSplitPct: 96,
+      valSplitPct: 2,
+      testSplitPct: 2,
+      decontaminationFilter: true,
+      domainMixture: {
+        webCrawl: 4.8,
+        code: 3.8,
+        math: 2.2,
+        science: 1.6,
+        booksHistory: 0.8,
+        syntheticCoT: 1.0,
+        multilingual: 0.6,
+        multimodal: 0.0,
+      },
+      sftRounds: 3,
+      rlhfAlignment: 3,
+      rlvrEffort: 'High',
+    },
+  },
+  {
+    label: 'BitNet-70B Ternary 1.58b (MatMul-Free)',
+    badge: 'Fits 16GB Laptop / Edge',
+    config: {
+      modelName: 'BitNet-70B-Ternary (Low Power)',
+      license: 'Open Weights',
+      paradigm: 'Dense',
+      totalParamsB: 70,
+      activeParamRatio: 1.0,
+      attention: 'GQA',
+      contextWindowK: 128,
+      precision: 'Ternary 1.58b',
+      optimizer: 'Muon',
+      gpuType: 'H200',
+      gpuCount: 1024,
+      totalTokensT: 15,
+      trainSplitPct: 96,
+      valSplitPct: 2,
+      testSplitPct: 2,
+      decontaminationFilter: true,
+      domainMixture: {
+        webCrawl: 4.5,
+        code: 3.5,
+        math: 2.2,
+        science: 1.8,
+        booksHistory: 1.0,
+        syntheticCoT: 1.2,
+        multilingual: 0.8,
+        multimodal: 0.0,
+      },
+      sftRounds: 2,
+      rlhfAlignment: 2,
+      rlvrEffort: 'Medium',
+    },
+  },
   {
     label: 'Chronos-V2 Ultra (Frontier MoE)',
     badge: 'Balanced #1 Contender',

@@ -19,6 +19,7 @@ import {
   Server,
   Trophy,
   Zap,
+  Coins,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -219,6 +220,11 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
       postTrainingUSD: Math.round(econ.postTrainingCostUSD),
       powerCoolingUSD: Math.round(econ.powerCoolingCostUSD),
       grandTotalBuildCostUSD: Math.round(econ.grandTotalBuildCostUSD),
+      cloudRentalTotalUSD: Math.round(econ.procurement.cloudRentalTotalUSD),
+      cloudRentalHourlyUSD: Number(econ.procurement.cloudRentalHourlyUSD.toFixed(2)),
+      ownedHardwareCapExUSD: Math.round(econ.procurement.ownedHardwareCapExUSD),
+      ownedDepreciatedRunUSD: Math.round(econ.procurement.ownedHardwareTotalUSD),
+      breakevenMonths: econ.procurement.breakevenMonths,
     },
     inferenceDeployment: {
       canRunBadge: econ.canRunOnBadge,
@@ -484,6 +490,52 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
                   <div className="text-[10px] text-cyan-400">{item.share}% of budget</div>
                 </div>
               ))}
+            </div>
+
+            {/* Cloud Rental vs Local Owned Hardware Comparison Banner */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Hardware Procurement: Cloud On-Demand Rental vs. Owned Hardware</span>
+                </span>
+                <span className="text-[10px] text-cyan-300 font-bold bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 rounded">
+                  Cluster Breakeven: {econ.procurement.breakevenMonths} Months
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] pt-1">
+                <div className="p-2.5 rounded-lg bg-slate-900/80 border border-cyan-500/30 space-y-1">
+                  <div className="text-cyan-300 font-bold">☁️ Cloud Rental (OpEx)</div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Cluster Hourly Burn:</span>
+                    <span className="font-bold text-white">{formatMoney(econ.procurement.cloudRentalHourlyUSD)}/hr</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Run Compute Total:</span>
+                    <span className="font-bold text-cyan-300">{formatMoney(econ.procurement.cloudRentalTotalUSD)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 text-[10px]">
+                    <span>Upfront Commitment:</span>
+                    <span className="text-emerald-400 font-bold">$0 (Zero CapEx)</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-900/80 border border-purple-500/30 space-y-1">
+                  <div className="text-purple-300 font-bold">🏢 Owned Cluster (CapEx)</div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Hardware CapEx:</span>
+                    <span className="font-bold text-amber-300">{formatMoney(econ.procurement.ownedHardwareCapExUSD)} ({config.gpuCount.toLocaleString()}x @ ${gpu.purchaseCostUSD.toLocaleString()})</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>3-Yr Amortized Run:</span>
+                    <span className="font-bold text-purple-300">{formatMoney(econ.procurement.ownedHardwareTotalUSD)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 text-[10px]">
+                    <span>Breakeven Threshold:</span>
+                    <span className="text-white font-bold">{econ.procurement.breakevenMonths} Mo ({econ.procurement.breakevenTrainingHours.toLocaleString()} continuous hrs)</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

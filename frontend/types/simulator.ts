@@ -1,6 +1,18 @@
-export type ParadigmType = 'Dense' | 'Sparse MoE' | 'Hybrid Mamba-Transformer';
+export type ParadigmType =
+  | 'Dense'
+  | 'Sparse MoE'
+  | 'DeepSeek-V3 MoE'
+  | 'Hybrid Mamba-Transformer';
 export type AttentionType = 'MLA' | 'GQA' | 'MHA';
-export type PrecisionType = 'FP8' | 'BF16' | 'FP16' | 'INT8' | 'INT4' | 'FP32';
+export type PrecisionType =
+  | 'FP8'
+  | 'BF16'
+  | 'FP16'
+  | 'INT8'
+  | 'INT4'
+  | 'FP32'
+  | 'Ternary 1.58b'
+  | 'Bonsai 1-bit';
 export type OptimizerType = 'Muon' | 'AdamW' | 'Lion';
 export type GpuType = 'H100' | 'H200' | 'B200' | 'TPUv6e' | 'Ascend910C';
 export type RlvrEffortType = 'Low' | 'Medium' | 'High' | 'Xhigh' | 'Max';
@@ -68,7 +80,19 @@ export interface GpuHardwareSpec {
   bandwidthTBps: number;
   tdpWatts: number;
   hourlyRateUSD: number;
+  purchaseCostUSD: number;
   interconnect: string;
+}
+
+export interface HardwareProcurementBreakdown {
+  cloudRentalHourlyUSD: number;
+  cloudRentalTotalUSD: number;
+  ownedHardwareCapExUSD: number;
+  ownedDepreciatedHourlyUSD: number;
+  ownedHardwareTotalUSD: number;
+  ownedSavingsUSD: number;
+  breakevenTrainingHours: number;
+  breakevenMonths: number;
 }
 
 export interface EconomicsBreakdown {
@@ -86,6 +110,7 @@ export interface EconomicsBreakdown {
   totalEnergyMWh: number;
   powerCoolingCostUSD: number;
   grandTotalBuildCostUSD: number;
+  procurement: HardwareProcurementBreakdown;
   weightBytesPerParam: number;
   gradBytesPerParam: number;
   optBytesPerParam: number;
