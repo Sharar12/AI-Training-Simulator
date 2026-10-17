@@ -710,6 +710,16 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
                       </div>
                     </div>
 
+                    {/* Real-World Human Archive vs Frontier Limit Indicator */}
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-[10px] font-mono">
+                      <span className="text-slate-400">
+                        {d.archiveNote}
+                      </span>
+                      <span className="text-cyan-400 font-semibold whitespace-nowrap bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                        Human Earth Archive: ~{d.humanArchiveMaxT}T • Max Headroom: {d.maxTokensT}T
+                      </span>
+                    </div>
+
                     {/* Independent Range Slider */}
                     <input
                       type="range"

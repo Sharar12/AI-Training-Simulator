@@ -360,8 +360,18 @@ export function calculateHardwareAndEconomics(
   );
 
   // E. Chinchilla Optimality & Intelligence Index Prediction
-  // Optimal tokens: 20 tokens per active parameter (in Trillions: activeParamsB * 20 / 1000)
-  const chinchillaOptimalTokensT = Number(Math.max(0.2, (activeParamsB * 20) / 1000).toFixed(2));
+  // E. Chinchilla Optimality & Intelligence Index Prediction
+  // Optimal tokens:
+  // For Dense: 20 tokens per parameter
+  // For MoE: 20 tokens per active parameter + 5 tokens per total parameter (for expert coverage)
+  const chinchillaOptimalTokensT = Number(
+    Math.max(
+      0.2,
+      config.paradigm === 'Dense'
+        ? (totalParamsB * 20) / 1000
+        : (activeParamsB * 20 + totalParamsB * 5) / 1000
+    ).toFixed(2)
+  );
   const chinchillaRatio = Number((effectiveTrainTokensT / chinchillaOptimalTokensT).toFixed(2));
 
   let chinchillaStatus: EconomicsBreakdown['chinchillaStatus'] = 'Chinchilla Optimal Zone';
@@ -371,22 +381,23 @@ export function calculateHardwareAndEconomics(
     chinchillaStatus = 'Over-Trained (Inference-Optimized)';
   }
 
-  // Intelligence Index calculation (Calibrated accurately to modern Artificial Analysis scale: 9 to 58)
-  const effectiveCapacityB =
-    config.paradigm === 'Dense'
-      ? totalParamsB
-      : config.paradigm === 'Sparse MoE'
-        ? activeParamsB * 0.45 + Math.pow(totalParamsB, 0.85) * 0.65
-        : activeParamsB * 0.6 + totalParamsB * 0.45;
+  // Intelligence Index calculation (Calibrated accurately to modern Artificial Analysis scale)
+  // Active parameters determine deep per-token reasoning capacity & multi-step algorithmic coherence
+  // Total parameters determine factual knowledge retention & encyclopedic recall
+  const activeCapScore = 5.5 * Math.log10(Math.max(0.01, activeParamsB));
+  const totalKnowledgeScore = 3.2 * Math.log10(Math.max(0.01, totalParamsB));
+  const paramScore = 10.5 + activeCapScore + totalKnowledgeScore;
 
-  // Allow sub-1B models to scale naturally without artificial clamping
-  const capB = Math.max(0.01, effectiveCapacityB);
-  // At 1,000B (1T): 10.5 + 8.5*3 = 36.0 base
-  // At 100B: 10.5 + 8.5*2 = 27.5 base
-  // At 10B: 10.5 + 8.5*1 = 19.0 base
-  // At 1B: 10.5 + 8.5*0 = 10.5 base
-  // At 0.03B (30M): 10.5 - 12.9 = -2.4 base
-  const paramScore = 10.5 + 8.5 * Math.log10(capB);
+  // Architecture Paradigm bonus / trade-off:
+  // - Dense Transformer: +1.6 bonus (full parameter update per token, zero routing noise, peak representation density)
+  // - Sparse MoE: 0.0 baseline (heavily conditioned on active parameter ratio)
+  // - Hybrid Mamba-Attn: -0.9 on complex multi-hop reasoning due to linear state compression, but gives +32% tok/s boost
+  const paradigmDelta =
+    config.paradigm === 'Dense'
+      ? 1.6
+      : config.paradigm === 'Sparse MoE'
+        ? 0.0
+        : -0.9;
 
   // Token scaling contribution
   let tokenDelta = 0;
@@ -396,8 +407,8 @@ export function calculateHardwareAndEconomics(
     tokenDelta = Math.min(5.8, 3.1 * Math.log2(chinchillaRatio));
   }
 
-  // Model reasoning capacity factor: Sub-16B models cannot hold complex multi-step RLVR reasoning
-  const reasoningCapacityFactor = Math.min(1.0, Math.max(0.08, Math.pow(capB / 16, 0.65)));
+  // Model reasoning capacity factor: Sub-16B active models cannot hold complex multi-step RLVR reasoning
+  const reasoningCapacityFactor = Math.min(1.0, Math.max(0.08, Math.pow(Math.max(0.01, activeParamsB) / 16, 0.65)));
 
   // Domain mixture quality bonus
   const stemBalance = Math.min(4.2, (dPcts.code * 0.08 + dPcts.math * 0.09 + dPcts.science * 0.07));
@@ -437,6 +448,7 @@ export function calculateHardwareAndEconomics(
 
   const rawIndex =
     paramScore +
+    paradigmDelta +
     tokenDelta +
     stemBalance +
     synthBonus +
@@ -448,9 +460,9 @@ export function calculateHardwareAndEconomics(
     contaminationPenalty +
     eventBonusIndex;
 
-  // Calibrated accurately: Top frontier models score ~57-58.5, compact sub-1B edge models score ~4-8
+  // Calibrated accurately: Top frontier models score ~57-58.5, compact sub-1B edge models score ~4-8, ultra 1000T models scale up to ~65
   const predictedIntelligenceIndex = Number(
-    Math.min(58.5, Math.max(4.0, rawIndex)).toFixed(1)
+    Math.min(65.0, Math.max(4.0, rawIndex)).toFixed(1)
   );
 
   // Output Speed (tok/s)

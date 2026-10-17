@@ -28,6 +28,8 @@ export interface DomainMetadata {
   color: string;
   barClass: string;
   maxTokensT: number;
+  humanArchiveMaxT: number;
+  archiveNote: string;
   stepTokensT: number;
   tbMultiplier: number;
   quickPicks: DomainQuickPick[];
@@ -37,8 +39,8 @@ export interface SimulatorConfig {
   modelName: string;
   license: 'Proprietary' | 'Open Weights';
   paradigm: ParadigmType;
-  totalParamsB: number; // 1 to 10000 (1B to 10T)
-  activeParamRatio: number; // 0.03 to 1.0 (3% to 100%)
+  totalParamsB: number; // 1 to 1000000 (1B to 1,000T)
+  activeParamRatio: number; // 0.02 to 1.0 (2% to 100%)
   attention: AttentionType;
   contextWindowK: number; // 8 to 10000 (8K to 10M)
   precision: PrecisionType;

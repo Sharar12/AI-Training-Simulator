@@ -679,7 +679,9 @@ export const TRAINING_EVENTS: TrainingEventAlert[] = [
   },
 ];
 
-export const PARAM_STOPS = [1, 7, 14, 32, 70, 180, 400, 671, 1000, 1800, 3500, 10000];
+export const PARAM_STOPS = [
+  1, 7, 14, 32, 70, 180, 400, 671, 1000, 5000, 10000, 50000, 100000, 500000, 1000000,
+];
 export const CONTEXT_STOPS = [8, 32, 128, 256, 500, 1000, 2000, 5000, 10000];
 export const GPU_COUNT_STOPS = [128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
 
@@ -692,6 +694,8 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-slate-300',
     barClass: 'bg-slate-400',
     maxTokensT: 250.0,
+    humanArchiveMaxT: 30.0,
+    archiveNote: 'Human Web Archive: ~15T-30T tokens (FineWeb is 15T). Beyond 30T uses multi-epoch passes or raw 250T web pools.',
     stepTokensT: 0.5,
     tbMultiplier: 3.0,
     quickPicks: [
@@ -701,7 +705,8 @@ export const DOMAIN_META: DomainMetadata[] = [
       { label: '6.0T (DeepSeek-V3)', tokensT: 6.0 },
       { label: '7.5T (Llama-3 Web)', tokensT: 7.5 },
       { label: '15.0T (FineWeb Full)', tokensT: 15.0 },
-      { label: '50.0T (Hyperscale Web)', tokensT: 50.0 },
+      { label: '30.0T (RedPajama Full)', tokensT: 30.0 },
+      { label: '100.0T (Multi-Epoch Web)', tokensT: 100.0 },
     ],
   },
   {
@@ -712,6 +717,8 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-cyan-300',
     barClass: 'bg-cyan-400',
     maxTokensT: 80.0,
+    humanArchiveMaxT: 6.0,
+    archiveNote: 'Global Public Code: ~3.5T-6T tokens (The Stack v2). Beyond 6T uses commit diffs, issues & synthetic code rollouts.',
     stepTokensT: 0.25,
     tbMultiplier: 2.8,
     quickPicks: [
@@ -731,10 +738,13 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-emerald-300',
     barClass: 'bg-emerald-400',
     maxTokensT: 40.0,
+    humanArchiveMaxT: 0.1,
+    archiveNote: 'Human Math Archive: Only ~0.06T tokens (OpenWebMath 14.8B). All frontier 1T-5T math is generated synthetically.',
     stepTokensT: 0.1,
     tbMultiplier: 3.0,
     quickPicks: [
       { label: '0T', tokensT: 0 },
+      { label: '0.06T (Human Web Math)', tokensT: 0.06 },
       { label: '0.5T (Proof-Pile-2)', tokensT: 0.5 },
       { label: '1.5T (OpenWebMath+Synth)', tokensT: 1.5 },
       { label: '3.8T (Lean4 Formal Matrix)', tokensT: 3.8 },
@@ -749,13 +759,15 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-purple-300',
     barClass: 'bg-purple-400',
     maxTokensT: 40.0,
+    humanArchiveMaxT: 2.5,
+    archiveNote: 'World Academic Record: ~2.5T tokens across all papers (PubMed 0.3T, arXiv 0.15T, S2ORC 0.25T). Beyond 2.5T is multi-epoch.',
     stepTokensT: 0.1,
     tbMultiplier: 3.1,
     quickPicks: [
       { label: '0T', tokensT: 0 },
       { label: '0.6T (PubMed Central)', tokensT: 0.6 },
       { label: '1.5T (ArXiv+bioRxiv)', tokensT: 1.5 },
-      { label: '2.8T (S2ORC Full Academic)', tokensT: 2.8 },
+      { label: '2.5T (All World Science)', tokensT: 2.5 },
       { label: '5.0T (STEM Multi-Disciplinary)', tokensT: 5.0 },
     ],
   },
@@ -767,6 +779,8 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-amber-300',
     barClass: 'bg-amber-400',
     maxTokensT: 40.0,
+    humanArchiveMaxT: 2.5,
+    archiveNote: 'Synthetic Rollouts: Frontier labs synthesize 1T-10T tokens of verifiable reasoning traces and RL rollouts.',
     stepTokensT: 0.1,
     tbMultiplier: 3.2,
     quickPicks: [
@@ -785,6 +799,8 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-pink-300',
     barClass: 'bg-pink-400',
     maxTokensT: 80.0,
+    humanArchiveMaxT: 10.0,
+    archiveNote: 'Global Multilingual Web: ~10T tokens (CulturaX is 6.3T across 167 langs, MADLAD is 3T). Beyond 10T is multi-epoch.',
     stepTokensT: 0.25,
     tbMultiplier: 3.4,
     quickPicks: [
@@ -803,6 +819,8 @@ export const DOMAIN_META: DomainMetadata[] = [
     color: 'text-indigo-300',
     barClass: 'bg-indigo-400',
     maxTokensT: 80.0,
+    humanArchiveMaxT: 5.0,
+    archiveNote: 'Interleaved Vision/Audio: OBELICS is 1.2T tokens. Video frames and Whisper transcripts scale up to 80T.',
     stepTokensT: 0.25,
     tbMultiplier: 4.5,
     quickPicks: [

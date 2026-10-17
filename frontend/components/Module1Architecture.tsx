@@ -139,18 +139,24 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                       id: 'Dense',
                       title: 'Dense Transformer',
                       desc: '100% weights active per token',
+                      tag: '+1.6 AA Index • Peak Density',
+                      tagCls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10',
                     },
                     {
                       id: 'Sparse MoE',
                       title: 'Sparse MoE',
                       desc: 'Top-K routed experts + shared',
+                      tag: 'Dynamic • Scaled by Active %',
+                      tagCls: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10',
                     },
                     {
                       id: 'Hybrid Mamba-Transformer',
                       title: 'Hybrid Mamba-Attn',
                       desc: 'Linear SSM + interleaved MLA',
+                      tag: '+32% Speed • -0.9 AA Index',
+                      tagCls: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
                     },
-                  ] as { id: ParadigmType; title: string; desc: string }[]
+                  ] as { id: ParadigmType; title: string; desc: string; tag: string; tagCls: string }[]
                 ).map((item) => (
                   <button
                     key={item.id}
@@ -177,38 +183,68 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                       {item.title}
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">{item.desc}</div>
+                    <div className="mt-2">
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono border ${item.tagCls}`}>
+                        {item.tag}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Total Parameters Slider */}
+            {/* Total Parameters Slider (Scales from 1B up to 1,000T) */}
             <div className="pt-2">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-mono text-slate-300">
-                  Total Parameters (1B – 10T)
+                  Total Parameters (1B – 1,000T)
                   <SettingTooltip id="totalParamsB" />
                 </label>
-                <span className="font-mono text-sm font-bold text-cyan-300">
-                  {config.totalParamsB >= 1000
-                    ? `${(config.totalParamsB / 1000).toFixed(2)} Trillion (${config.totalParamsB.toLocaleString()}B)`
-                    : `${config.totalParamsB} Billion`}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-cyan-300">
+                    {config.totalParamsB >= 1000000
+                      ? `${(config.totalParamsB / 1000000).toFixed(2)} Quadrillion (${config.totalParamsB.toLocaleString()}B)`
+                      : config.totalParamsB >= 1000
+                        ? `${(config.totalParamsB / 1000).toFixed(2)} Trillion (${config.totalParamsB.toLocaleString()}B)`
+                        : `${config.totalParamsB} Billion`}
+                  </span>
+                  <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000000}
+                      value={config.totalParamsB}
+                      onChange={(e) =>
+                        onChange((prev) => ({
+                          ...prev,
+                          totalParamsB: Math.max(1, Math.min(1000000, Number(e.target.value))),
+                        }))
+                      }
+                      className="w-16 bg-transparent text-right font-mono text-xs text-white focus:outline-none"
+                    />
+                    <span className="text-[10px] font-mono text-slate-400">B</span>
+                  </div>
+                </div>
               </div>
+
+              {/* Logarithmic Slider spanning 1B to 1,000,000B (1B to 1,000T) */}
               <input
                 type="range"
-                min={1}
-                max={10000}
-                step={1}
-                value={config.totalParamsB}
-                onChange={(e) =>
+                min={0}
+                max={6}
+                step={0.01}
+                value={Math.log10(Math.max(1, config.totalParamsB))}
+                onChange={(e) => {
+                  const rawVal = Math.pow(10, Number(e.target.value));
+                  const rounded = rawVal >= 10000 ? Math.round(rawVal / 1000) * 1000 : Math.round(rawVal);
                   onChange((prev) => ({
                     ...prev,
-                    totalParamsB: Number(e.target.value),
-                  }))
-                }
+                    totalParamsB: Math.max(1, Math.min(1000000, rounded)),
+                  }));
+                }}
                 className="w-full accent-cyan-400 cursor-pointer"
               />
+
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {PARAM_STOPS.map((stop) => (
                   <button
@@ -219,11 +255,11 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                     }
                     className={`px-2 py-0.5 rounded text-[10px] font-mono border transition ${
                       config.totalParamsB === stop
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold'
                         : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    {stop >= 1000 ? `${stop / 1000}T` : `${stop}B`}
+                    {stop >= 1000000 ? '1000T' : stop >= 1000 ? `${stop / 1000}T` : `${stop}B`}
                   </button>
                 ))}
               </div>
@@ -237,18 +273,25 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
             <div className="pt-2">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-mono text-slate-300">
-                  MoE Active Parameter Ratio
+                  MoE Active Parameter Ratio (Direct Reasoning Scaling)
                   <SettingTooltip id="activeParamRatio" />
                 </label>
-                <span className="font-mono text-xs font-bold text-emerald-300">
-                  {config.paradigm === 'Dense'
-                    ? '100% (Dense Locked)'
-                    : `${Math.round(config.activeParamRatio * 100)}% Active (${econ.activeParamsB}B / tok)`}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-emerald-300">
+                    {config.paradigm === 'Dense'
+                      ? '100% (Dense Full Activation)'
+                      : `${Math.round(config.activeParamRatio * 100)}% Active (${econ.activeParamsB >= 1000 ? (econ.activeParamsB / 1000).toFixed(2) + 'T' : econ.activeParamsB + 'B'} / tok)`}
+                  </span>
+                  {config.paradigm !== 'Dense' && (
+                    <span className="font-mono text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-1.5 py-0.5 rounded">
+                      +{(5.5 * Math.log10(Math.max(1, config.totalParamsB * config.activeParamRatio)) - 5.5 * Math.log10(Math.max(1, config.totalParamsB * 0.05))).toFixed(1)} AA vs 5% base
+                    </span>
+                  )}
+                </div>
               </div>
               <input
                 type="range"
-                min={0.03}
+                min={0.02}
                 max={1.0}
                 step={0.01}
                 disabled={config.paradigm === 'Dense'}
@@ -259,10 +302,14 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                     activeParamRatio: Number(e.target.value),
                   }))
                 }
-                className="w-full accent-emerald-400 cursor-pointer disabled:opacity-40"
+                className={`w-full accent-emerald-400 ${
+                  config.paradigm === 'Dense'
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'cursor-pointer'
+                }`}
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
-                <span>3% Ultra-Sparse (DeepSeek Style)</span>
+                <span>2% Ultra-Sparse (DeepSeek Style)</span>
                 <span>15% Moderate MoE</span>
                 <span>100% Dense</span>
               </div>
