@@ -10,13 +10,19 @@ import {
   BarChart3,
   BookOpen,
   Brain,
+  Calendar,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
+  Copy,
   Cpu,
   Database,
   DollarSign,
+  Download,
   FastForward,
+  FileText,
   Flame,
   HardDrive,
   HelpCircle,
@@ -2097,6 +2103,15 @@ export function formatMemoryGB(gb: number): string {
   return `${gb.toFixed(1)} GB`;
 }
 
+export function formatTrainingDuration(hours: number): string {
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} Minutes`;
+  if (hours < 24) return `${hours.toFixed(1)} Hours`;
+  const days = hours / 24;
+  if (days < 30) return `${days.toFixed(1)} Days (${Math.round(hours).toLocaleString()} hrs)`;
+  const months = days / 30.417;
+  return `${months.toFixed(1)} Months (${days.toFixed(0)} Days / ${Math.round(hours).toLocaleString()} hrs)`;
+}
+
 export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
   config,
   econ,
@@ -2152,6 +2167,13 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
             <span className="text-slate-400">Build Total: </span>
             <span className="text-emerald-400 font-bold">
               {formatMoney(econ.grandTotalBuildCostUSD)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-400">Train Time: </span>
+            <span className="text-cyan-300 font-bold flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              {econ.trainingDays >= 1 ? `${econ.trainingDays.toFixed(1)}d` : `${econ.trainingHours.toFixed(1)}h`}
             </span>
           </div>
           <div>
@@ -3868,6 +3890,52 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
         </div>
       )}
 
+      {/* Live Training Duration & Clock Tracker */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900/90 via-slate-900/95 to-cyan-950/40 border border-slate-800 flex flex-wrap items-center justify-between gap-4 font-mono">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <span>Cluster Wall-Clock Training Time</span>
+              {progress === 100 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                  Run 100% Converged
+                </span>
+              )}
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-white flex items-baseline gap-2">
+              <span>{formatTrainingDuration(econ.trainingHours)}</span>
+              <span className="text-xs text-cyan-300 font-normal">
+                ({econ.trainingDays.toFixed(1)} Days • {Math.round(econ.trainingHours).toLocaleString()} Hours)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800">
+            <span className="text-slate-400 block text-[10px]">Elapsed Time</span>
+            <span className="font-bold text-cyan-300">
+              {((econ.trainingDays * progress) / 100).toFixed(1)} Days ({((econ.trainingHours * progress) / 100).toFixed(0)} hrs)
+            </span>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800">
+            <span className="text-slate-400 block text-[10px]">Time Remaining</span>
+            <span className="font-bold text-amber-300">
+              {progress === 100 ? '0.0 Days (Done)' : `${(econ.trainingDays * (1 - progress / 100)).toFixed(1)} Days`}
+            </span>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800">
+            <span className="text-slate-400 block text-[10px]">Cluster Compute</span>
+            <span className="font-bold text-purple-300">
+              {econ.totalFlops.toExponential(2)} FLOPs
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* 4-Stage Pipeline Progress Bars */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {stages.map((st) => {
@@ -3984,22 +4052,38 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
           </div>
 
           {/* Cluster Hardware Telemetry Counters */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono">
+              <span className="text-[10px] text-slate-400 uppercase block flex items-center gap-1">
+                <Clock className="w-3 h-3 text-cyan-400" />
+                Train Time
+              </span>
+              <span className="text-base font-bold text-cyan-300">
+                {econ.trainingDays >= 1 ? `${econ.trainingDays.toFixed(1)}d` : `${econ.trainingHours.toFixed(1)}h`}
+              </span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {Math.round(econ.trainingHours).toLocaleString()} hrs
+              </span>
+            </div>
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono">
               <span className="text-[10px] text-slate-400 uppercase block">Live Cluster MFU</span>
               <span className="text-base font-bold text-emerald-300">{currentPoint.mfu}%</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">GPU efficiency</span>
             </div>
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono">
               <span className="text-[10px] text-slate-400 uppercase block">Gradient L2 Norm</span>
               <span className="text-base font-bold text-cyan-300">{currentPoint.gradNorm}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Norm stability</span>
             </div>
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono">
               <span className="text-[10px] text-slate-400 uppercase block">Power Draw (PUE 1.2)</span>
               <span className="text-base font-bold text-amber-300">{currentPoint.mwDraw} MW</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">{Math.round(econ.totalEnergyMWh).toLocaleString()} MWh</span>
             </div>
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono">
               <span className="text-[10px] text-slate-400 uppercase block">Pred. AA Index</span>
               <span className="text-base font-bold text-white">{econ.predictedIntelligenceIndex}</span>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">Target rating</span>
             </div>
           </div>
         </div>
@@ -4058,6 +4142,805 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- MODULE: TrainingSettingsDossier.tsx ---
+interface TrainingSettingsDossierProps {
+  config: SimulatorConfig;
+  econ: EconomicsBreakdown;
+  userRank: number;
+}
+
+export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = ({
+  config,
+  econ,
+  userRank,
+}) => {
+  const [activeTab, setActiveTab] = useState<'budget' | 'data' | 'memory'>('budget');
+  const [copied, setCopied] = useState<boolean>(false);
+  const gpu = GPU_SPECS[config.gpuType];
+
+  const costChartData = [
+    {
+      name: 'Compute',
+      fullName: 'Pre-Training Compute',
+      cost: Math.round(econ.preTrainingComputeCostUSD),
+      formatted: formatMoney(econ.preTrainingComputeCostUSD),
+      share: Number(((econ.preTrainingComputeCostUSD / econ.grandTotalBuildCostUSD) * 100).toFixed(1)),
+      fill: '#06b6d4',
+    },
+    {
+      name: 'Data',
+      fullName: 'Data & Synthesis',
+      cost: Math.round(econ.dataAcquisitionCostUSD),
+      formatted: formatMoney(econ.dataAcquisitionCostUSD),
+      share: Number(((econ.dataAcquisitionCostUSD / econ.grandTotalBuildCostUSD) * 100).toFixed(1)),
+      fill: '#3b82f6',
+    },
+    {
+      name: 'Post-Train',
+      fullName: 'Post-Training (SFT/RLVR)',
+      cost: Math.round(econ.postTrainingCostUSD),
+      formatted: formatMoney(econ.postTrainingCostUSD),
+      share: Number(((econ.postTrainingCostUSD / econ.grandTotalBuildCostUSD) * 100).toFixed(1)),
+      fill: '#8b5cf6',
+    },
+    {
+      name: 'Power/Cooling',
+      fullName: 'Power & Cooling (PUE 1.2)',
+      cost: Math.round(econ.powerCoolingCostUSD),
+      formatted: formatMoney(econ.powerCoolingCostUSD),
+      share: Number(((econ.powerCoolingCostUSD / econ.grandTotalBuildCostUSD) * 100).toFixed(1)),
+      fill: '#f59e0b',
+    },
+  ];
+
+  const domainData = [
+    {
+      name: 'Web Crawl',
+      pct: config.domainMixture.webCrawl,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.webCrawl) / 100).toFixed(2)),
+      fill: '#94a3b8',
+    },
+    {
+      name: 'Code',
+      pct: config.domainMixture.code,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.code) / 100).toFixed(2)),
+      fill: '#06b6d4',
+    },
+    {
+      name: 'Math',
+      pct: config.domainMixture.math,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.math) / 100).toFixed(2)),
+      fill: '#10b981',
+    },
+    {
+      name: 'Science',
+      pct: config.domainMixture.science,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.science) / 100).toFixed(2)),
+      fill: '#a855f7',
+    },
+    {
+      name: 'Synth CoT',
+      pct: config.domainMixture.syntheticCoT,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.syntheticCoT) / 100).toFixed(2)),
+      fill: '#f59e0b',
+    },
+    {
+      name: 'Multilingual',
+      pct: config.domainMixture.multilingual,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.multilingual) / 100).toFixed(2)),
+      fill: '#ec4899',
+    },
+    {
+      name: 'Multimodal',
+      pct: config.domainMixture.multimodal,
+      tokensT: Number(((config.totalTokensT * config.domainMixture.multimodal) / 100).toFixed(2)),
+      fill: '#6366f1',
+    },
+  ];
+
+  const memoryData = [
+    { name: 'Training VRAM', value: Math.round(econ.trainingVramGB), unit: 'GB', fill: '#06b6d4' },
+    { name: 'Inference VRAM', value: Math.round(econ.inferenceVramGB), unit: 'GB', fill: '#10b981' },
+    { name: 'Weights', value: Math.round(econ.inferenceWeightGB), unit: 'GB', fill: '#8b5cf6' },
+    { name: 'Activation', value: Math.round(econ.activationBufferGB), unit: 'GB', fill: '#3b82f6' },
+    { name: 'KV Cache', value: Math.round(econ.kvCacheVramGB), unit: 'GB', fill: '#f59e0b' },
+  ];
+
+  const fullSpecification = {
+    modelName: config.modelName,
+    trainingDuration: {
+      wallClockDays: Number(econ.trainingDays.toFixed(2)),
+      wallClockHours: Number(econ.trainingHours.toFixed(1)),
+      formattedDuration: formatTrainingDuration(econ.trainingHours),
+      totalGpuHours: Math.round(econ.trainingHours * config.gpuCount),
+    },
+    modelArchitecture: {
+      paradigm: config.paradigm,
+      totalParametersB: econ.totalParamsB,
+      activeParametersB: econ.activeParamsB,
+      activeRatioPct: Math.round(config.activeParamRatio * 100),
+      attention: config.attention,
+      contextWindowK: config.contextWindowK,
+      contextWindowFormatted: formatContextWindow(config.contextWindowK),
+      numericPrecision: config.precision,
+      optimizer: config.optimizer,
+      license: config.license,
+    },
+    hardwareCluster: {
+      accelerator: gpu.name,
+      gpuCount: config.gpuCount,
+      vramPerGpuGB: gpu.vramGB,
+      achievedMfuPct: econ.mfuPct,
+      powerDrawMegawatts: Number(econ.powerMegawatts.toFixed(2)),
+      datacenterPue: 1.2,
+      totalEnergyMWh: Math.round(econ.totalEnergyMWh),
+      totalTrainingFlops: econ.totalFlops,
+      trainingVramRequiredGB: Math.round(econ.trainingVramGB),
+      checkpointStorageTB: Number(econ.trainingTotalStorageTB.toFixed(1)),
+    },
+    dataPipeline: {
+      totalTokensTrillion: config.totalTokensT,
+      effectiveTrainTokensT: Number((config.totalTokensT * (config.trainSplitPct / 100)).toFixed(2)),
+      splits: {
+        trainPct: config.trainSplitPct,
+        valPct: config.valSplitPct,
+        testPct: config.testSplitPct,
+      },
+      chinchillaRatio: econ.chinchillaRatio,
+      chinchillaStatus: econ.chinchillaStatus,
+      decontaminationFilter: config.decontaminationFilter,
+      domainMixture: config.domainMixture,
+    },
+    postTraining: {
+      sftRounds: config.sftRounds,
+      rlhfAlignment: config.rlhfAlignment,
+      rlvrEffort: config.rlvrEffort,
+    },
+    costEconomicsUSD: {
+      preTrainingComputeUSD: Math.round(econ.preTrainingComputeCostUSD),
+      dataAcquisitionUSD: Math.round(econ.dataAcquisitionCostUSD),
+      postTrainingUSD: Math.round(econ.postTrainingCostUSD),
+      powerCoolingUSD: Math.round(econ.powerCoolingCostUSD),
+      grandTotalBuildCostUSD: Math.round(econ.grandTotalBuildCostUSD),
+    },
+    inferenceDeployment: {
+      canRunBadge: econ.canRunOnBadge,
+      inferenceVramGB: econ.inferenceVramGB,
+      kvCacheVramGB: Number(econ.kvCacheVramGB.toFixed(1)),
+      inferenceSystemRamGB: econ.inferenceSystemRamGB,
+      inferenceDiskGB: econ.inferenceDiskSpaceGB,
+      outputSpeedTokPerSec: econ.predictedOutputSpeedTokPerSec,
+      ttftSec: econ.predictedTtftSec,
+      inputTokenPricePer1M: econ.inputTokenPricePer1M,
+      outputTokenPricePer1M: econ.outputTokenPricePer1M,
+      blendedPricePer1M: econ.blendedPricePer1M,
+      costPerTaskUSD: econ.costPerTaskUSD,
+    },
+    evaluationResults: {
+      predictedIntelligenceIndex: econ.predictedIntelligenceIndex,
+      userRank,
+      subScores: econ.subScores,
+    },
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(fullSpecification, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleDownload = () => {
+    const jsonStr = JSON.stringify(fullSpecification, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${config.modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-spec.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div id="settings-dossier" className="mt-8 space-y-6">
+      {/* Dossier Section Header */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-cyan-950/40 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs uppercase tracking-wider text-cyan-400 font-bold">
+                Run Dossier &amp; Parameter Matrix
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Audited Simulation Spec
+              </span>
+            </div>
+            <h3 className="text-xl font-bold text-white mt-0.5">
+              Complete Training Settings &amp; Resource Allocation Breakdown
+            </h3>
+            <p className="text-xs font-mono text-slate-400">
+              Detailed configuration sheet detailing wall-clock training duration, accelerator sizing, data mixtures, and hyperparameter choices.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-mono text-xs transition"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-300 font-semibold">Copied JSON!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <span>Copy Settings JSON</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-mono text-xs font-semibold transition"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download Spec (.json)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Hero Training Time & Run Result Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.12)]">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="uppercase flex items-center gap-1 text-cyan-400 font-bold">
+              <Clock className="w-3.5 h-3.5" />
+              Time Took To Train
+            </span>
+            <span className="text-emerald-400 text-[10px]">Converged</span>
+          </div>
+          <div className="text-xl font-bold text-white">
+            {formatTrainingDuration(econ.trainingHours)}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {econ.trainingDays.toFixed(1)} Days • {Math.round(econ.trainingHours).toLocaleString()} Hours @ {econ.mfuPct}% MFU
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="uppercase text-emerald-400 flex items-center gap-1 font-bold">
+              <DollarSign className="w-3.5 h-3.5" />
+              Total Run Investment
+            </span>
+            <span className="text-[10px] text-slate-400">CapEx / OpEx</span>
+          </div>
+          <div className="text-xl font-bold text-emerald-300">
+            {formatMoney(econ.grandTotalBuildCostUSD)}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            Compute: {formatMoney(econ.preTrainingComputeCostUSD)} • Data: {formatMoney(econ.dataAcquisitionCostUSD)}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="uppercase text-purple-400 flex items-center gap-1 font-bold">
+              <Zap className="w-3.5 h-3.5" />
+              Compute &amp; Energy
+            </span>
+            <span className="text-[10px] text-slate-400">Cluster FLOPs</span>
+          </div>
+          <div className="text-xl font-bold text-purple-300">
+            {econ.totalFlops.toExponential(2)}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {Math.round(econ.totalEnergyMWh).toLocaleString()} MWh • {econ.powerMegawatts.toFixed(2)} MW draw
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="uppercase text-amber-400 flex items-center gap-1 font-bold">
+              <Trophy className="w-3.5 h-3.5" />
+              Final Intelligence
+            </span>
+            <span className="text-[10px] text-cyan-300 font-bold">Rank #{userRank}</span>
+          </div>
+          <div className="text-xl font-bold text-white">
+            {econ.predictedIntelligenceIndex} <span className="text-xs text-slate-400 font-normal">AA Index</span>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            Speed: {econ.predictedOutputSpeedTokPerSec} tok/s • TTFT: {econ.predictedTtftSec}s
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Charts: Settings & Allocation Breakdown */}
+      <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <h4 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-cyan-400" />
+              <span>Settings &amp; Resource Allocation Visualizations</span>
+            </h4>
+            <p className="text-[11px] font-mono text-slate-400">
+              Interactive visual breakdown of training costs, data pipeline allocation, and memory distribution.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab('budget')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono transition ${activeTab === 'budget'
+                  ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+                }`}
+            >
+              1. Training Budget Breakdown
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('data')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono transition ${activeTab === 'data'
+                  ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+                }`}
+            >
+              2. Data Pipeline Mixture
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('memory')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono transition ${activeTab === 'memory'
+                  ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+                }`}
+            >
+              3. Memory &amp; Footprint
+            </button>
+          </div>
+        </div>
+
+        {/* Tab 1: Training Budget Breakdown Chart */}
+        {activeTab === 'budget' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-slate-400">
+              <span>Total Build Investment: <strong className="text-emerald-400">{formatMoney(econ.grandTotalBuildCostUSD)}</strong></span>
+              <span>Total Wall-Clock Training Duration: <strong className="text-cyan-300">{formatTrainingDuration(econ.trainingHours)}</strong></span>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={costChartData} margin={{ top: 12, right: 16, left: 16, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}
+                  />
+                  <YAxis
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}
+                    tickFormatter={(v) => formatMoney(v)}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderColor: '#334155',
+                      borderRadius: '0.75rem',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                    }}
+                    formatter={(val: any, name: any, item: any) => [
+                      `${formatMoney(Number(val))} (${item.payload.share}% of total)`,
+                      item.payload.fullName,
+                    ]}
+                  />
+                  <Bar dataKey="cost" radius={[6, 6, 0, 0]}>
+                    {costChartData.map((entry, index) => (
+                      <Cell key={`cost-cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs">
+              {costChartData.map((item) => (
+                <div key={item.name} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-[10px] text-slate-400 truncate">{item.fullName}</div>
+                  <div className="font-bold text-white">{item.formatted}</div>
+                  <div className="text-[10px] text-cyan-400">{item.share}% of budget</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Data Pipeline Mixture Chart */}
+        {activeTab === 'data' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-slate-400">
+              <span>Total Dataset Volume: <strong className="text-cyan-300">{config.totalTokensT} Trillion Tokens</strong></span>
+              <span>Effective Training Split: <strong className="text-white">{(config.totalTokensT * (config.trainSplitPct / 100)).toFixed(2)}T ({config.trainSplitPct}%)</strong></span>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={domainData} margin={{ top: 12, right: 16, left: 16, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}
+                  />
+                  <YAxis
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderColor: '#334155',
+                      borderRadius: '0.75rem',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                    }}
+                    formatter={(val: any, name: any, item: any) => [
+                      `${val}% (${item.payload.tokensT} Trillion tokens)`,
+                      item.payload.name,
+                    ]}
+                  />
+                  <Bar dataKey="pct" radius={[6, 6, 0, 0]}>
+                    {domainData.map((entry, index) => (
+                      <Cell key={`domain-cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1 font-mono text-xs">
+              {domainData.map((d) => (
+                <div key={d.name} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-[10px] text-slate-400 truncate">{d.name}</div>
+                  <div className="font-bold text-white">{d.pct}%</div>
+                  <div className="text-[10px] text-emerald-400">{d.tokensT}T tokens</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Memory Footprint & Hardware Sizing Chart */}
+        {activeTab === 'memory' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-slate-400">
+              <span>Cluster Hardware: <strong className="text-white">{config.gpuCount.toLocaleString()}x {gpu.name}</strong></span>
+              <span>Serving Footprint: <strong className="text-amber-300">{econ.canRunOnBadge}</strong></span>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={memoryData} margin={{ top: 12, right: 16, left: 16, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}
+                  />
+                  <YAxis
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}
+                    tickFormatter={(v) => `${v} GB`}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderColor: '#334155',
+                      borderRadius: '0.75rem',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                    }}
+                    formatter={(val: any) => [`${val} GB`, 'Memory Required']}
+                  />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    {memoryData.map((entry, index) => (
+                      <Cell key={`mem-cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 font-mono text-xs">
+              {memoryData.map((m) => (
+                <div key={m.name} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-[10px] text-slate-400 truncate">{m.name}</div>
+                  <div className="font-bold text-white">{m.value} GB</div>
+                  <div className="text-[10px] text-cyan-400">{(m.value / 1024).toFixed(2)} TB</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 5-Column Complete Settings Specification Details Matrix */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 text-xs font-mono">
+        {/* Panel 1: Model Architecture Settings */}
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-cyan-400 font-bold uppercase pb-2 border-b border-slate-800">
+              <Cpu className="w-3.5 h-3.5" />
+              <span>1. Architecture Settings</span>
+            </div>
+            <div className="divide-y divide-slate-800/60 pt-1 space-y-1.5 text-[11px]">
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Model Name:</span>
+                <span className="text-white font-bold truncate max-w-[120px]">{config.modelName}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Paradigm:</span>
+                <span className="text-cyan-300 font-semibold">{config.paradigm}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Total Params:</span>
+                <span className="text-white font-bold">
+                  {econ.totalParamsB >= 1000 ? `${(econ.totalParamsB / 1000).toFixed(2)}T` : `${econ.totalParamsB}B`}
+                </span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Active Params:</span>
+                <span className="text-slate-200">
+                  {econ.activeParamsB}B ({Math.round(config.activeParamRatio * 100)}%)
+                </span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Attention:</span>
+                <span className="text-purple-300">{config.attention}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Context Window:</span>
+                <span className="text-slate-200">{formatContextWindow(config.contextWindowK)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Precision:</span>
+                <span className="text-amber-300 font-semibold">{config.precision}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Optimizer:</span>
+                <span className="text-emerald-300">{config.optimizer}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">License:</span>
+                <span className="text-slate-200">{config.license}</span>
+              </div>
+            </div>
+          </div>
+          <div className="p-2 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
+            State Memory: {econ.weightBytesPerParam}B weights + {econ.gradBytesPerParam}B grads + {econ.optBytesPerParam}B opt
+          </div>
+        </div>
+
+        {/* Panel 2: Training Duration & Compute Dynamics */}
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/40 space-y-3 flex flex-col justify-between shadow-[0_0_15px_rgba(6,182,212,0.08)]">
+          <div>
+            <div className="flex items-center gap-1.5 text-cyan-300 font-bold uppercase pb-2 border-b border-slate-800">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>2. Training Duration</span>
+            </div>
+            <div className="divide-y divide-slate-800/60 pt-1 space-y-1.5 text-[11px]">
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Time To Train:</span>
+                <span className="text-cyan-300 font-bold">{formatTrainingDuration(econ.trainingHours)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Wall-Clock Days:</span>
+                <span className="text-white font-semibold">{econ.trainingDays.toFixed(2)} Days</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Cluster Hours:</span>
+                <span className="text-slate-200">{Math.round(econ.trainingHours).toLocaleString()} hrs</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Total GPU Hours:</span>
+                <span className="text-slate-200">{Math.round(econ.trainingHours * config.gpuCount).toLocaleString()} GPU-hrs</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Total FLOPs:</span>
+                <span className="text-purple-300">{econ.totalFlops.toExponential(2)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Dataset Tokens:</span>
+                <span className="text-slate-200">{config.totalTokensT} Trillion</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Split (Tr/Val/Ts):</span>
+                <span className="text-slate-200">{config.trainSplitPct}% / {config.valSplitPct}% / {config.testSplitPct}%</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Chinchilla Ratio:</span>
+                <span className="text-emerald-300 font-bold">{econ.chinchillaRatio}x</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Decontamination:</span>
+                <span className={config.decontaminationFilter ? 'text-emerald-300' : 'text-rose-300'}>
+                  {config.decontaminationFilter ? 'Enabled' : 'Off (-2.5)'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="p-2 rounded bg-slate-950 border border-slate-800 text-[10px] text-cyan-300">
+            {econ.chinchillaStatus}
+          </div>
+        </div>
+
+        {/* Panel 3: Datacenter Cluster & Hardware Specs */}
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-blue-400 font-bold uppercase pb-2 border-b border-slate-800">
+              <Server className="w-3.5 h-3.5" />
+              <span>3. Cluster &amp; Hardware</span>
+            </div>
+            <div className="divide-y divide-slate-800/60 pt-1 space-y-1.5 text-[11px]">
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">GPU Accelerator:</span>
+                <span className="text-white font-semibold">{gpu.name.split(' (')[0]}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">GPU Cluster Size:</span>
+                <span className="text-cyan-300 font-bold">{config.gpuCount.toLocaleString()} Accelerators</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Memory Per GPU:</span>
+                <span className="text-slate-200">{gpu.vramGB} GB HBM</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Peak Cluster TFLOPS:</span>
+                <span className="text-white font-bold">
+                  {(
+                    (config.gpuCount *
+                      (config.precision === 'FP8' || config.precision === 'INT4'
+                        ? gpu.fp8Tflops
+                        : gpu.bf16Tflops)) /
+                    1000
+                  ).toFixed(1)}{' '}
+                  PFLOPS
+                </span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Achieved MFU:</span>
+                <span className="text-emerald-300 font-bold">{econ.mfuPct}%</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Power Draw:</span>
+                <span className="text-amber-300">{econ.powerMegawatts.toFixed(2)} MW</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Datacenter PUE:</span>
+                <span className="text-slate-200">1.20</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Total Energy:</span>
+                <span className="text-slate-200">{Math.round(econ.totalEnergyMWh).toLocaleString()} MWh</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Interconnect:</span>
+                <span className="text-slate-300 truncate max-w-[120px]">{gpu.interconnect}</span>
+              </div>
+            </div>
+          </div>
+          <div className="p-2 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
+            Training VRAM: {econ.trainingVramTB >= 1 ? `${econ.trainingVramTB.toFixed(2)} TB` : `${econ.trainingVramGB.toFixed(0)} GB`} (Fit Verified)
+          </div>
+        </div>
+
+        {/* Panel 4: Post-Training, Alignment & Costs */}
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-emerald-400 font-bold uppercase pb-2 border-b border-slate-800">
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>4. Alignment &amp; Budget</span>
+            </div>
+            <div className="divide-y divide-slate-800/60 pt-1 space-y-1.5 text-[11px]">
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Build Investment:</span>
+                <span className="text-emerald-300 font-bold">{formatMoney(econ.grandTotalBuildCostUSD)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Compute Cost:</span>
+                <span className="text-slate-200">{formatMoney(econ.preTrainingComputeCostUSD)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Data &amp; Synth:</span>
+                <span className="text-slate-200">{formatMoney(econ.dataAcquisitionCostUSD)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Post-Training Cost:</span>
+                <span className="text-slate-200">{formatMoney(econ.postTrainingCostUSD)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Power &amp; Cooling:</span>
+                <span className="text-slate-200">{formatMoney(econ.powerCoolingCostUSD)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">SFT Curriculum:</span>
+                <span className="text-purple-300">{config.sftRounds} Rounds</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">RLHF Alignment:</span>
+                <span className="text-purple-300">Level {config.rlhfAlignment} / 5</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">RLVR Thinking:</span>
+                <span className="text-amber-300 font-bold">{config.rlvrEffort}</span>
+              </div>
+            </div>
+          </div>
+          <div className="p-2 rounded bg-slate-950 border border-slate-800 text-[10px] text-amber-300">
+            RLVR Multiplier: {config.rlvrEffort === 'Max' ? '14.5x (+13.5 pts)' : config.rlvrEffort === 'Xhigh' ? '8.6x (+10.2 pts)' : config.rlvrEffort === 'High' ? '4.8x (+6.8 pts)' : config.rlvrEffort === 'Medium' ? '2.3x (+3.4 pts)' : '1.0x (+0.0 pts)'}
+          </div>
+        </div>
+
+        {/* Panel 5: Inference, Deployment & Unit Economics */}
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-purple-400 font-bold uppercase pb-2 border-b border-slate-800">
+              <Zap className="w-3.5 h-3.5" />
+              <span>5. Serving Economics</span>
+            </div>
+            <div className="divide-y divide-slate-800/60 pt-1 space-y-1.5 text-[11px]">
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Inference VRAM:</span>
+                <span className="text-cyan-300 font-bold">{econ.inferenceVramGB} GB</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">KV Cache Overhead:</span>
+                <span className="text-slate-200">{econ.kvCacheVramGB.toFixed(1)} GB</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">System RAM:</span>
+                <span className="text-slate-200">{econ.inferenceSystemRamGB} GB</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Disk Space:</span>
+                <span className="text-slate-200">{econ.inferenceDiskSpaceGB} GB</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Output Speed:</span>
+                <span className="text-emerald-300 font-bold">{econ.predictedOutputSpeedTokPerSec} tok/s</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">TTFT Latency:</span>
+                <span className="text-amber-300">{econ.predictedTtftSec}s</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Input Token ($/1M):</span>
+                <span className="text-slate-200">${econ.inputTokenPricePer1M.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Output Token ($/1M):</span>
+                <span className="text-slate-200">${econ.outputTokenPricePer1M.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-400">Cost Per Task:</span>
+                <span className="text-amber-300 font-bold">${econ.costPerTaskUSD.toFixed(4)}</span>
+              </div>
+            </div>
+          </div>
+          <div className="p-2 rounded bg-slate-950 border border-slate-800 text-[10px] text-cyan-300 truncate" title={econ.canRunOnBadge}>
+            Target: {econ.canRunOnBadge}
           </div>
         </div>
       </div>
@@ -4267,6 +5150,13 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
             <ArrowLeft className="w-4 h-4" />
             <span>Training Telemetry</span>
           </button>
+          <a
+            href="#settings-dossier"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-mono text-xs font-semibold transition"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Settings Dossier &amp; Charts</span>
+          </a>
           <button
             type="button"
             onClick={onSaveCurrentModel}
@@ -4279,7 +5169,7 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
       </div>
 
       {/* User Model Executive Benchmark Card */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-slate-900 to-emerald-950/50 border border-cyan-500/50 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 font-mono">
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-slate-900 to-emerald-950/50 border border-cyan-500/50 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 font-mono">
         <div>
           <span className="text-[10px] text-cyan-300 uppercase block">Your Model Rank</span>
           <span className="text-lg font-bold text-white">
@@ -4296,6 +5186,18 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
             {liveUserModel.intelligenceIndex > 58.9
               ? 'New #1 World Record!'
               : `${(58.9 - liveUserModel.intelligenceIndex).toFixed(1)} pts behind GPT-5.6 Sol`}
+          </span>
+        </div>
+        <div>
+          <span className="text-[10px] text-cyan-400 uppercase block flex items-center gap-1">
+            <Clock className="w-3 h-3 text-cyan-400" />
+            Training Time
+          </span>
+          <span className="text-lg font-bold text-white">
+            {econ.trainingDays >= 1 ? `${econ.trainingDays.toFixed(1)} Days` : `${econ.trainingHours.toFixed(1)} Hrs`}
+          </span>
+          <span className="text-[10px] text-slate-400 block truncate">
+            {Math.round(econ.trainingHours).toLocaleString()} hrs @ {econ.mfuPct}% MFU
           </span>
         </div>
         <div>
@@ -4770,6 +5672,9 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Complete Training Run Dossier & Parameter Specification Matrix */}
+      <TrainingSettingsDossier config={config} econ={econ} userRank={userRank} />
     </div>
   );
 };
