@@ -238,22 +238,33 @@ export function calculateHardwareAndEconomics(
   const synthDataCost = activeTokensT * synthShare * 860000;
   const mmDataCost = activeTokensT * multimodalShare * 210000;
   const booksDataCost = activeTokensT * booksShare * 95000;
-  const decontamCost = config.decontaminationFilter ? 120000 + activeTokensT * 14000 : 0;
+  // Decontamination compute scales with token volume (MinHash / n-gram clusters), minimum $120
+  const decontamCost = config.decontaminationFilter
+    ? Math.max(120, activeTokensT * 1800)
+    : 0;
   const dataAcquisitionCostUSD =
     baseDataCost + stemDataCost + synthDataCost + mmDataCost + booksDataCost + decontamCost;
 
   // Post-Training (SFT + RLHF + RLVR) Cost ($)
+  // Realistically scales with active parameters (compute per step) and GPU pricing
   const rlvrMultiplierMap: Record<RlvrEffortType, number> = {
     Low: 1.0,
-    Medium: 2.3,
-    High: 4.8,
-    Xhigh: 8.6,
-    Max: 14.5,
+    Medium: 2.2,
+    High: 4.5,
+    Xhigh: 8.2,
+    Max: 14.0,
   };
   const rlvrMult = rlvrMultiplierMap[config.rlvrEffort];
-  const sftCost = (activeParamsB * 1800 + 85000) * config.sftRounds;
-  const rlhfCost = (activeParamsB * 2400 + 140000) * config.rlhfAlignment;
-  const rlvrCost = (activeParamsB * 5200 + 220000) * rlvrMult;
+  const gpuRateFactor = Math.max(0.6, gpu.hourlyRateUSD / 3.0);
+
+  // SFT: 250K-1M curated instruction pairs per round (~$350/B active parameters)
+  const sftCost = (activeParamsB * 350 + 120) * config.sftRounds * gpuRateFactor;
+
+  // RLHF / DPO: Pairwise preference optimization & reference policy scoring (~$490/B active parameters)
+  const rlhfCost = (activeParamsB * 490 + 180) * config.rlhfAlignment * gpuRateFactor;
+
+  // RLVR (GRPO Rollouts): Inference-time sampling (8-16 rollouts/prompt) + execution verifiers (~$850/B active parameters * effort multiplier)
+  const rlvrCost = (activeParamsB * 850 + 350) * rlvrMult * gpuRateFactor;
   const postTrainingCostUSD = sftCost + rlhfCost + rlvrCost;
 
   // Power & Cooling Overhead ($ & Megawatt-Hours): GPU TDP * Training Hours * PUE (1.2)
