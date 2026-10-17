@@ -1034,6 +1034,12 @@ export const Module4Leaderboard: React.FC<Module4LeaderboardProps> = ({
       deepseek: deepseekRef.subScores.science,
     },
     {
+      domain: 'Humanities & Lore',
+      user: liveUserModel.subScores.humanities,
+      opponent: opponentModel.subScores.humanities ?? 88.5,
+      deepseek: deepseekRef.subScores.humanities ?? 91.2,
+    },
+    {
       domain: '1M Context',
       user: liveUserModel.subScores.longContext,
       opponent: opponentModel.subScores.longContext,

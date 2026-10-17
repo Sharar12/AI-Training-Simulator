@@ -10,6 +10,7 @@ export interface DomainMixture {
   code: number;
   math: number;
   science: number;
+  booksHistory: number;
   syntheticCoT: number;
   multilingual: number;
   multimodal: number;
@@ -126,6 +127,7 @@ export interface EconomicsBreakdown {
     math: number;
     coding: number;
     science: number;
+    humanities: number;
     longContext: number;
     multilingual: number;
     multimodal: number;
@@ -161,6 +163,7 @@ export interface CompetitorModel {
     math: number;
     coding: number;
     science: number;
+    humanities?: number;
     longContext: number;
     multilingual: number;
     multimodal: number;

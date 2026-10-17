@@ -78,11 +78,12 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
       if (currentSum === 0) {
         // Balanced frontier starter distribution
         const updated: DomainMixture = {
-          webCrawl: Number((clamped * 0.35).toFixed(2)),
-          code: Number((clamped * 0.22).toFixed(2)),
-          math: Number((clamped * 0.15).toFixed(2)),
-          science: Number((clamped * 0.1).toFixed(2)),
-          syntheticCoT: Number((clamped * 0.1).toFixed(2)),
+          webCrawl: Number((clamped * 0.32).toFixed(2)),
+          code: Number((clamped * 0.20).toFixed(2)),
+          math: Number((clamped * 0.14).toFixed(2)),
+          science: Number((clamped * 0.10).toFixed(2)),
+          booksHistory: Number((clamped * 0.08).toFixed(2)),
+          syntheticCoT: Number((clamped * 0.08).toFixed(2)),
           multilingual: Number((clamped * 0.04).toFixed(2)),
           multimodal: Number((clamped * 0.04).toFixed(2)),
         };
@@ -90,13 +91,14 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
       }
       const ratio = clamped / currentSum;
       const updated: DomainMixture = {
-        webCrawl: Number((prev.domainMixture.webCrawl * ratio).toFixed(2)),
-        code: Number((prev.domainMixture.code * ratio).toFixed(2)),
-        math: Number((prev.domainMixture.math * ratio).toFixed(2)),
-        science: Number((prev.domainMixture.science * ratio).toFixed(2)),
-        syntheticCoT: Number((prev.domainMixture.syntheticCoT * ratio).toFixed(2)),
-        multilingual: Number((prev.domainMixture.multilingual * ratio).toFixed(2)),
-        multimodal: Number((prev.domainMixture.multimodal * ratio).toFixed(2)),
+        webCrawl: Number(((prev.domainMixture.webCrawl || 0) * ratio).toFixed(2)),
+        code: Number(((prev.domainMixture.code || 0) * ratio).toFixed(2)),
+        math: Number(((prev.domainMixture.math || 0) * ratio).toFixed(2)),
+        science: Number(((prev.domainMixture.science || 0) * ratio).toFixed(2)),
+        booksHistory: Number(((prev.domainMixture.booksHistory || 0) * ratio).toFixed(2)),
+        syntheticCoT: Number(((prev.domainMixture.syntheticCoT || 0) * ratio).toFixed(2)),
+        multilingual: Number(((prev.domainMixture.multilingual || 0) * ratio).toFixed(2)),
+        multimodal: Number(((prev.domainMixture.multimodal || 0) * ratio).toFixed(2)),
       };
       return { ...prev, domainMixture: updated, totalTokensT: clamped };
     });
@@ -222,15 +224,257 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Master Capacity Sizing, Train/Val/Test Splits & 7 Independent Domain Sliders */}
+        {/* Left Column: 1. 8-Domain Mixture -> 2. Master Capacity Footprint -> 3. Train/Val/Test Partition */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Section 1: Master Dataset Sizing (Scales up to 1,000 TB NVMe) */}
+          {/* Section 1: 8-Domain Pre-Training Mixture (Independent Real-World Tokens) */}
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-emerald-400" />
-                <span>1. Master Dataset Capacity (Scalable to 1,000 TB NVMe)</span>
-              </h3>
+              <div>
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                  <Database className="w-4 h-4 text-cyan-400" />
+                  <span>1. 8-Domain Pre-Training Mixture (Independent Real-World Tokens)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Adjust each real-world domain independently. The total tokens and master dataset footprint update automatically.
+                </p>
+              </div>
+
+              {/* Realistic Real-World Mixture Presets */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: 'Llama 3.1 15T',
+                    tokens: {
+                      webCrawl: 7.0,
+                      code: 3.0,
+                      math: 1.0,
+                      science: 0.5,
+                      booksHistory: 1.0,
+                      syntheticCoT: 0.5,
+                      multilingual: 2.0,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'DeepSeek-V3 14.8T',
+                    tokens: {
+                      webCrawl: 5.5,
+                      code: 3.2,
+                      math: 2.0,
+                      science: 0.8,
+                      booksHistory: 1.0,
+                      syntheticCoT: 1.6,
+                      multilingual: 0.7,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'Qwen 2.5 18T',
+                    tokens: {
+                      webCrawl: 6.5,
+                      code: 3.5,
+                      math: 2.5,
+                      science: 1.0,
+                      booksHistory: 1.2,
+                      syntheticCoT: 1.0,
+                      multilingual: 2.3,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'Humanities & Lore Heavy',
+                    tokens: {
+                      webCrawl: 4.5,
+                      code: 2.0,
+                      math: 1.0,
+                      science: 1.5,
+                      booksHistory: 3.5,
+                      syntheticCoT: 1.5,
+                      multilingual: 2.0,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'STEM & Reasoning Heavy',
+                    tokens: {
+                      webCrawl: 3.5,
+                      code: 5.5,
+                      math: 4.5,
+                      science: 2.5,
+                      booksHistory: 0.8,
+                      syntheticCoT: 3.5,
+                      multilingual: 1.0,
+                      multimodal: 0.7,
+                    },
+                  },
+                  {
+                    label: '1,000 TB Max Pool',
+                    tokens: {
+                      webCrawl: 120.0,
+                      code: 45.0,
+                      math: 28.0,
+                      science: 22.0,
+                      booksHistory: 20.0,
+                      syntheticCoT: 25.0,
+                      multilingual: 25.0,
+                      multimodal: 17.5,
+                    },
+                  },
+                  {
+                    label: 'Zero All (0T)',
+                    tokens: {
+                      webCrawl: 0,
+                      code: 0,
+                      math: 0,
+                      science: 0,
+                      booksHistory: 0,
+                      syntheticCoT: 0,
+                      multilingual: 0,
+                      multimodal: 0,
+                    },
+                  },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => applyMixturePreset(preset)}
+                    className="px-2 py-1 rounded text-[10px] font-mono bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-slate-800 transition"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Stacked Proportional Bar of Mixture */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                <span>Mixture Composition ({DOMAIN_META.length} Domains)</span>
+                <span>{totalTokensT > 0 ? `Total: ${totalTokensT.toFixed(2)}T tokens (${econ.datasetStorageTB.toFixed(1)} TB)` : 'Corpus Empty (0.00T)'}</span>
+              </div>
+              <div className="w-full h-3.5 rounded-full overflow-hidden flex bg-slate-950 p-0.5 border border-slate-800">
+                {DOMAIN_META.map((d) => {
+                  const pct = pcts[d.key];
+                  if (pct <= 0) return null;
+                  return (
+                    <div
+                      key={d.key}
+                      style={{ width: `${pct}%` }}
+                      title={`${d.label}: ${pct}% (${tokens[d.key]}T tok)`}
+                      className={`${d.barClass} h-full first:rounded-l-full last:rounded-r-full transition-all`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 8 Independent Domain Sliders with Real-World Limits and Datasets */}
+            <div className="space-y-4 pt-1">
+              {DOMAIN_META.map((d) => {
+                const currentT = tokens[d.key] || 0;
+                const currentPct = pcts[d.key] || 0;
+                const diskTB = Number((currentT * d.tbMultiplier).toFixed(1));
+
+                return (
+                  <div
+                    key={d.key}
+                    className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2 hover:border-slate-700/80 transition"
+                  >
+                    {/* Domain Header: Label, Datasets & Telemetry */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
+                          <span className={d.color}>{d.label}</span>
+                          <SettingTooltip id={d.tooltipId} />
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500">
+                          {d.datasets}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-slate-400">
+                          {currentPct}% share • {diskTB} TB
+                        </span>
+                        <div className="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                          <input
+                            type="number"
+                            min={0}
+                            max={d.maxTokensT}
+                            step={d.stepTokensT}
+                            value={currentT}
+                            onChange={(e) =>
+                              handleDomainTokenChange(d.key, Number(e.target.value))
+                            }
+                            className="w-16 bg-transparent text-right font-mono font-bold text-white text-xs focus:outline-none"
+                          />
+                          <span className="text-slate-400 text-xs font-mono">T tok</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Real-World Human Archive vs Frontier Limit Indicator */}
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-[10px] font-mono">
+                      <span className="text-slate-400">
+                        {d.archiveNote}
+                      </span>
+                      <span className="text-cyan-400 font-semibold whitespace-nowrap bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                        Human Earth Archive: ~{d.humanArchiveMaxT}T • Max Headroom: {d.maxTokensT}T
+                      </span>
+                    </div>
+
+                    {/* Independent Range Slider */}
+                    <input
+                      type="range"
+                      min={0}
+                      max={d.maxTokensT}
+                      step={d.stepTokensT}
+                      value={currentT}
+                      onChange={(e) =>
+                        handleDomainTokenChange(d.key, Number(e.target.value))
+                      }
+                      className="w-full accent-cyan-400 cursor-pointer h-1.5"
+                    />
+
+                    {/* Quick Pick Real-World Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] font-mono text-slate-500">Quick:</span>
+                      {d.quickPicks.map((chip) => {
+                        const isMatch = Math.abs(currentT - chip.tokensT) < 0.05;
+                        return (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => handleDomainTokenChange(d.key, chip.tokensT)}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition ${
+                              isMatch
+                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                            }`}
+                          >
+                            {chip.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 2: Master Dataset Capacity & Storage Footprint (Derived from Mixture) */}
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                  <HardDrive className="w-4 h-4 text-emerald-400" />
+                  <span>2. Master Dataset Capacity &amp; Storage Footprint</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Directly derived from the sum of the 8 domains above. Use the master slider below to scale all domains proportionally.
+                </p>
+              </div>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold border ${
                   econ.chinchillaStatus.includes('Optimal')
@@ -247,7 +491,7 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                  <span>Total Training Dataset Volume (0.5T – 312.5T Tokens • Up to 1,000 TB)</span>
+                  <span>Proportional Master Dataset Scaler (Scalable to 1,000 TB NVMe)</span>
                   <SettingTooltip id="totalTokensT" />
                 </label>
                 <div className="flex items-center gap-2">
@@ -299,13 +543,18 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Train / Validation / Test Custom Split Control */}
+          {/* Section 3: Train / Validation / Test Custom Split Control */}
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                <span>2. Train, Validation &amp; Test Split (Fully Adjustable)</span>
-              </h3>
+              <div>
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-cyan-400" />
+                  <span>3. Train, Validation &amp; Test Split (Partitioned from Total Corpus)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Partitions the {totalTokensT.toFixed(2)}T master tokens ({econ.datasetStorageTB.toFixed(1)} TB) into training shards and held-out evaluation sets.
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-semibold border ${
@@ -432,7 +681,7 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
-                    <span>Test / Benchmark Holdout Split</span>
+                    <span>Test / Holdout Set Split</span>
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-slate-400">
@@ -539,224 +788,6 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
                   </span>
                 </button>
               </div>
-            </div>
-          </div>
-
-          {/* Section 3: 7-Domain Pre-Training Mixture (Independent Real-World Tokens) */}
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-                  <Database className="w-4 h-4 text-cyan-400" />
-                  <span>3. 7-Domain Pre-Training Mixture (Independent Real-World Tokens)</span>
-                </h3>
-                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                  Adjust each domain independently without affecting others. Total tokens updates automatically.
-                </p>
-              </div>
-
-              {/* Realistic Real-World Mixture Presets */}
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  {
-                    label: 'Llama 3.1 15T',
-                    tokens: {
-                      webCrawl: 7.5,
-                      code: 3.0,
-                      math: 1.0,
-                      science: 0.5,
-                      syntheticCoT: 0.5,
-                      multilingual: 2.5,
-                      multimodal: 0.0,
-                    },
-                  },
-                  {
-                    label: 'DeepSeek-V3 14.8T',
-                    tokens: {
-                      webCrawl: 6.0,
-                      code: 3.5,
-                      math: 2.2,
-                      science: 0.8,
-                      syntheticCoT: 1.6,
-                      multilingual: 0.7,
-                      multimodal: 0.0,
-                    },
-                  },
-                  {
-                    label: 'Qwen 2.5 18T',
-                    tokens: {
-                      webCrawl: 7.0,
-                      code: 3.5,
-                      math: 2.5,
-                      science: 1.0,
-                      syntheticCoT: 1.0,
-                      multilingual: 3.0,
-                      multimodal: 0.0,
-                    },
-                  },
-                  {
-                    label: 'STEM & Reasoning Heavy',
-                    tokens: {
-                      webCrawl: 4.0,
-                      code: 6.0,
-                      math: 5.0,
-                      science: 3.0,
-                      syntheticCoT: 4.0,
-                      multilingual: 1.0,
-                      multimodal: 1.0,
-                    },
-                  },
-                  {
-                    label: '1,000 TB Max Pool',
-                    tokens: {
-                      webCrawl: 140.0,
-                      code: 50.0,
-                      math: 30.0,
-                      science: 25.0,
-                      syntheticCoT: 25.0,
-                      multilingual: 25.0,
-                      multimodal: 17.5,
-                    },
-                  },
-                  {
-                    label: 'Zero All (0T)',
-                    tokens: {
-                      webCrawl: 0,
-                      code: 0,
-                      math: 0,
-                      science: 0,
-                      syntheticCoT: 0,
-                      multilingual: 0,
-                      multimodal: 0,
-                    },
-                  },
-                ].map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => applyMixturePreset(preset)}
-                    className="px-2 py-1 rounded text-[10px] font-mono bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-slate-800 transition"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Stacked Proportional Bar of Mixture */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-[11px] font-mono text-slate-400">
-                <span>Mixture Composition</span>
-                <span>{totalTokensT > 0 ? `Total: ${totalTokensT.toFixed(2)}T tokens (${econ.datasetStorageTB.toFixed(1)} TB)` : 'Corpus Empty (0.00T)'}</span>
-              </div>
-              <div className="w-full h-3.5 rounded-full overflow-hidden flex bg-slate-950 p-0.5 border border-slate-800">
-                {DOMAIN_META.map((d) => {
-                  const pct = pcts[d.key];
-                  if (pct <= 0) return null;
-                  return (
-                    <div
-                      key={d.key}
-                      style={{ width: `${pct}%` }}
-                      title={`${d.label}: ${pct}% (${tokens[d.key]}T tok)`}
-                      className={`${d.barClass} h-full first:rounded-l-full last:rounded-r-full transition-all`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 7 Independent Domain Sliders with Real-World Limits and Datasets */}
-            <div className="space-y-4 pt-1">
-              {DOMAIN_META.map((d) => {
-                const currentT = tokens[d.key] || 0;
-                const currentPct = pcts[d.key] || 0;
-                const diskTB = Number((currentT * d.tbMultiplier).toFixed(1));
-
-                return (
-                  <div
-                    key={d.key}
-                    className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2 hover:border-slate-700/80 transition"
-                  >
-                    {/* Domain Header: Label, Datasets & Telemetry */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
-                          <span className={d.color}>{d.label}</span>
-                          <SettingTooltip id={d.tooltipId} />
-                        </div>
-                        <div className="text-[10px] font-mono text-slate-500">
-                          {d.datasets}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-mono text-slate-400">
-                          {currentPct}% share • {diskTB} TB
-                        </span>
-                        <div className="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
-                          <input
-                            type="number"
-                            min={0}
-                            max={d.maxTokensT}
-                            step={d.stepTokensT}
-                            value={currentT}
-                            onChange={(e) =>
-                              handleDomainTokenChange(d.key, Number(e.target.value))
-                            }
-                            className="w-16 bg-transparent text-right font-mono font-bold text-white text-xs focus:outline-none"
-                          />
-                          <span className="text-slate-400 text-xs font-mono">T tok</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Real-World Human Archive vs Frontier Limit Indicator */}
-                    <div className="flex flex-wrap items-center justify-between gap-1.5 py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-[10px] font-mono">
-                      <span className="text-slate-400">
-                        {d.archiveNote}
-                      </span>
-                      <span className="text-cyan-400 font-semibold whitespace-nowrap bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                        Human Earth Archive: ~{d.humanArchiveMaxT}T • Max Headroom: {d.maxTokensT}T
-                      </span>
-                    </div>
-
-                    {/* Independent Range Slider */}
-                    <input
-                      type="range"
-                      min={0}
-                      max={d.maxTokensT}
-                      step={d.stepTokensT}
-                      value={currentT}
-                      onChange={(e) =>
-                        handleDomainTokenChange(d.key, Number(e.target.value))
-                      }
-                      className="w-full accent-cyan-400 cursor-pointer h-1.5"
-                    />
-
-                    {/* Quick Pick Real-World Chips */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <span className="text-[10px] font-mono text-slate-500">Quick:</span>
-                      {d.quickPicks.map((chip) => {
-                        const isMatch = Math.abs(currentT - chip.tokensT) < 0.05;
-                        return (
-                          <button
-                            key={chip.label}
-                            type="button"
-                            onClick={() => handleDomainTokenChange(d.key, chip.tokensT)}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition ${
-                              isMatch
-                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold'
-                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
-                            }`}
-                          >
-                            {chip.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </div>
@@ -906,6 +937,12 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
                   val: econ.subScores.science,
                   color: 'bg-purple-400',
                   tokensT: tokens.science,
+                },
+                {
+                  label: 'Literature, History & Humanities',
+                  val: econ.subScores.humanities,
+                  color: 'bg-rose-400',
+                  tokensT: tokens.booksHistory,
                 },
                 {
                   label: 'Long-Context Recall (RULER 1M)',

@@ -21,6 +21,7 @@ export function normalizeDomainMixture(
     'code',
     'math',
     'science',
+    'booksHistory',
     'syntheticCoT',
     'multilingual',
     'multimodal',
@@ -41,6 +42,7 @@ export function normalizeDomainMixture(
       code: Number(((mixture.code / rawSum) * fallbackTotalTokensT).toFixed(2)),
       math: Number(((mixture.math / rawSum) * fallbackTotalTokensT).toFixed(2)),
       science: Number(((mixture.science / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      booksHistory: Number((((mixture.booksHistory || 0) / rawSum) * fallbackTotalTokensT).toFixed(2)),
       syntheticCoT: Number(((mixture.syntheticCoT / rawSum) * fallbackTotalTokensT).toFixed(2)),
       multilingual: Number(((mixture.multilingual / rawSum) * fallbackTotalTokensT).toFixed(2)),
       multimodal: Number(((mixture.multimodal / rawSum) * fallbackTotalTokensT).toFixed(2)),
@@ -52,6 +54,7 @@ export function normalizeDomainMixture(
       code: Math.max(0, Number(mixture.code) || 0),
       math: Math.max(0, Number(mixture.math) || 0),
       science: Math.max(0, Number(mixture.science) || 0),
+      booksHistory: Math.max(0, Number(mixture.booksHistory) || 0),
       syntheticCoT: Math.max(0, Number(mixture.syntheticCoT) || 0),
       multilingual: Math.max(0, Number(mixture.multilingual) || 0),
       multimodal: Math.max(0, Number(mixture.multimodal) || 0),
@@ -67,6 +70,7 @@ export function normalizeDomainMixture(
     code: effectiveSum > 0 ? Number(((tokens.code / effectiveSum) * 100).toFixed(1)) : 0,
     math: effectiveSum > 0 ? Number(((tokens.math / effectiveSum) * 100).toFixed(1)) : 0,
     science: effectiveSum > 0 ? Number(((tokens.science / effectiveSum) * 100).toFixed(1)) : 0,
+    booksHistory: effectiveSum > 0 ? Number(((tokens.booksHistory / effectiveSum) * 100).toFixed(1)) : 0,
     syntheticCoT: effectiveSum > 0 ? Number(((tokens.syntheticCoT / effectiveSum) * 100).toFixed(1)) : 0,
     multilingual: effectiveSum > 0 ? Number(((tokens.multilingual / effectiveSum) * 100).toFixed(1)) : 0,
     multimodal: effectiveSum > 0 ? Number(((tokens.multimodal / effectiveSum) * 100).toFixed(1)) : 0,
@@ -227,14 +231,16 @@ export function calculateHardwareAndEconomics(
     (dPcts.code + dPcts.math + dPcts.science) / 100;
   const synthShare = dPcts.syntheticCoT / 100;
   const multimodalShare = dPcts.multimodal / 100;
+  const booksShare = (dPcts.booksHistory || 0) / 100;
 
   const baseDataCost = activeTokensT * 42000;
   const stemDataCost = activeTokensT * stemShare * 185000;
   const synthDataCost = activeTokensT * synthShare * 860000;
   const mmDataCost = activeTokensT * multimodalShare * 210000;
+  const booksDataCost = activeTokensT * booksShare * 95000;
   const decontamCost = config.decontaminationFilter ? 120000 + activeTokensT * 14000 : 0;
   const dataAcquisitionCostUSD =
-    baseDataCost + stemDataCost + synthDataCost + mmDataCost + decontamCost;
+    baseDataCost + stemDataCost + synthDataCost + mmDataCost + booksDataCost + decontamCost;
 
   // Post-Training (SFT + RLHF + RLVR) Cost ($)
   const rlvrMultiplierMap: Record<RlvrEffortType, number> = {
@@ -413,6 +419,7 @@ export function calculateHardwareAndEconomics(
   // Domain mixture quality bonus
   const stemBalance = Math.min(4.2, (dPcts.code * 0.08 + dPcts.math * 0.09 + dPcts.science * 0.07));
   const synthBonus = Math.min(4.5, Math.pow(dPcts.syntheticCoT, 0.78) * 0.36) * reasoningCapacityFactor;
+  const humanitiesBonus = Math.min(1.2, Math.pow(dPcts.booksHistory || 0, 0.7) * 0.22);
   const webPenalty = dPcts.webCrawl < 8 ? -2.2 : dPcts.webCrawl > 70 ? -1.8 : 0.4;
 
   // Precision & Optimizer & Attention deltas
@@ -452,6 +459,7 @@ export function calculateHardwareAndEconomics(
     tokenDelta +
     stemBalance +
     synthBonus +
+    humanitiesBonus +
     webPenalty +
     precisionDelta +
     optimizerDelta +
@@ -563,6 +571,11 @@ export function calculateHardwareAndEconomics(
     ? Math.min(98.5, potentialCeiling * Math.pow(scienceExposure, 1.1))
     : 0.0;
 
+  // Literature, History, Philosophy, Religions, Mythology & Poetry
+  const humanitiesDataTokens = (dTokens.booksHistory || 0) + (dTokens.webCrawl || 0) * 0.12;
+  const humanitiesExposure = Math.min(1.0, ((dTokens.booksHistory || 0) > 0 ? 0.18 : 0.05) + humanitiesDataTokens / 2.2);
+  const humanitiesScore = Math.min(99.0, potentialCeiling * humanitiesExposure);
+
   const longContextScore = Math.min(
     99.0,
     Math.max(
@@ -585,6 +598,7 @@ export function calculateHardwareAndEconomics(
     math: Number(mathScore.toFixed(1)),
     coding: Number(codeScore.toFixed(1)),
     science: Number(scienceScore.toFixed(1)),
+    humanities: Number(humanitiesScore.toFixed(1)),
     longContext: Number(longContextScore.toFixed(1)),
     multilingual: Number(multilingualScore.toFixed(1)),
     multimodal: Number(multimodalScore.toFixed(1)),
