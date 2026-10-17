@@ -50,6 +50,7 @@ import {
   formatMoney,
   formatContextWindow,
   formatTrainingDuration,
+  normalizeDomainMixture,
 } from '../lib/simulationEngine';
 import { SettingTooltip } from './SettingTooltip';
 
@@ -68,6 +69,11 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
   const [activeTab, setActiveTab] = useState<'budget' | 'data' | 'memory'>('budget');
   const [copied, setCopied] = useState<boolean>(false);
   const gpu = GPU_SPECS[config.gpuType];
+
+  const { tokens: dTokens, pcts: dPcts, totalTokensT: activeTokensT } = normalizeDomainMixture(
+    config.domainMixture,
+    config.totalTokensT
+  );
 
   const costChartData = [
     {
@@ -107,44 +113,44 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
   const domainData = [
     {
       name: 'Web Crawl',
-      pct: config.domainMixture.webCrawl,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.webCrawl) / 100).toFixed(2)),
+      pct: dPcts.webCrawl,
+      tokensT: dTokens.webCrawl,
       fill: '#94a3b8',
     },
     {
       name: 'Code',
-      pct: config.domainMixture.code,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.code) / 100).toFixed(2)),
+      pct: dPcts.code,
+      tokensT: dTokens.code,
       fill: '#06b6d4',
     },
     {
       name: 'Math',
-      pct: config.domainMixture.math,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.math) / 100).toFixed(2)),
+      pct: dPcts.math,
+      tokensT: dTokens.math,
       fill: '#10b981',
     },
     {
       name: 'Science',
-      pct: config.domainMixture.science,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.science) / 100).toFixed(2)),
+      pct: dPcts.science,
+      tokensT: dTokens.science,
       fill: '#a855f7',
     },
     {
       name: 'Synth CoT',
-      pct: config.domainMixture.syntheticCoT,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.syntheticCoT) / 100).toFixed(2)),
+      pct: dPcts.syntheticCoT,
+      tokensT: dTokens.syntheticCoT,
       fill: '#f59e0b',
     },
     {
       name: 'Multilingual',
-      pct: config.domainMixture.multilingual,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.multilingual) / 100).toFixed(2)),
+      pct: dPcts.multilingual,
+      tokensT: dTokens.multilingual,
       fill: '#ec4899',
     },
     {
       name: 'Multimodal',
-      pct: config.domainMixture.multimodal,
-      tokensT: Number(((config.totalTokensT * config.domainMixture.multimodal) / 100).toFixed(2)),
+      pct: dPcts.multimodal,
+      tokensT: dTokens.multimodal,
       fill: '#6366f1',
     },
   ];
@@ -190,8 +196,8 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
       checkpointStorageTB: Number(econ.trainingTotalStorageTB.toFixed(1)),
     },
     dataPipeline: {
-      totalTokensTrillion: config.totalTokensT,
-      effectiveTrainTokensT: Number((config.totalTokensT * (config.trainSplitPct / 100)).toFixed(2)),
+      totalTokensTrillion: activeTokensT,
+      effectiveTrainTokensT: Number((activeTokensT * (config.trainSplitPct / 100)).toFixed(2)),
       splits: {
         trainPct: config.trainSplitPct,
         valPct: config.valSplitPct,
@@ -487,12 +493,15 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-slate-400">
               <span>
-                Total Dataset Volume: <strong className="text-cyan-300">{config.totalTokensT} Trillion Tokens</strong>
+                Total Dataset Volume:{' '}
+                <strong className="text-cyan-300">
+                  {activeTokensT} Trillion Tokens ({econ.datasetStorageTB.toFixed(1)} TB NVMe)
+                </strong>
               </span>
               <span>
                 Effective Training Split:{' '}
                 <strong className="text-white">
-                  {(config.totalTokensT * (config.trainSplitPct / 100)).toFixed(2)}T ({config.trainSplitPct}%)
+                  {(activeTokensT * (config.trainSplitPct / 100)).toFixed(2)}T ({config.trainSplitPct}%)
                 </strong>
               </span>
             </div>
@@ -686,7 +695,7 @@ export const TrainingSettingsDossier: React.FC<TrainingSettingsDossierProps> = (
               </div>
               <div className="flex justify-between pt-1">
                 <span className="text-slate-400">Dataset Tokens:</span>
-                <span className="text-slate-200">{config.totalTokensT} Trillion</span>
+                <span className="text-slate-200">{activeTokensT} Trillion ({econ.datasetStorageTB.toFixed(1)} TB)</span>
               </div>
               <div className="flex justify-between pt-1">
                 <span className="text-slate-400">Split (Tr/Val/Ts):</span>

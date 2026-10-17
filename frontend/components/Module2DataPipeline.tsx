@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Database,
   Sliders,
@@ -10,6 +10,10 @@ import {
   ShieldAlert,
   ArrowLeft,
   ArrowRight,
+  HardDrive,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import {
   SimulatorConfig,
@@ -18,7 +22,7 @@ import {
   RlvrEffortType,
 } from '../types/simulator';
 import { DOMAIN_META } from '../data/constants';
-import { formatMoney } from '../lib/simulationEngine';
+import { formatMoney, normalizeDomainMixture } from '../lib/simulationEngine';
 import { SettingTooltip } from './SettingTooltip';
 
 interface Module2DataPipelineProps {
@@ -36,39 +40,96 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
   onPrevStage,
   onNextStage,
 }) => {
-  const handleDomainSlider = (targetKey: keyof DomainMixture, newValue: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(newValue)));
-    onChange((prev) => {
-      const current = prev.domainMixture;
-      const otherKeys = (Object.keys(current) as (keyof DomainMixture)[]).filter(
-        (k) => k !== targetKey
-      );
-      const otherSum = otherKeys.reduce((acc, k) => acc + current[k], 0);
-      const remaining = 100 - clamped;
+  const { tokens, pcts, totalTokensT } = normalizeDomainMixture(
+    config.domainMixture,
+    config.totalTokensT
+  );
 
-      const updated: DomainMixture = { ...current, [targetKey]: clamped };
-      if (otherSum === 0) {
-        const share = Math.floor(remaining / otherKeys.length);
-        otherKeys.forEach((k, idx) => {
-          updated[k] = idx === 0 ? remaining - share * (otherKeys.length - 1) : share;
-        });
-      } else {
-        let running = 0;
-        otherKeys.forEach((k, idx) => {
-          if (idx === otherKeys.length - 1) {
-            updated[k] = Math.max(0, remaining - running);
-          } else {
-            const scaled = Math.round((current[k] / otherSum) * remaining);
-            updated[k] = scaled;
-            running += scaled;
-          }
-        });
-      }
-      return { ...prev, domainMixture: updated };
+  const [activeTab, setActiveTab] = useState<'mixture' | 'splits'>('mixture');
+
+  // Independent Domain Token handler: only modifies targetKey and updates totalTokensT
+  const handleDomainTokenChange = (targetKey: keyof DomainMixture, newTokens: number) => {
+    const clamped = Math.max(0, Number(newTokens.toFixed(2)));
+    onChange((prev) => {
+      const updatedMixture: DomainMixture = {
+        ...prev.domainMixture,
+        [targetKey]: clamped,
+      };
+      const newTotalTokens = Object.values(updatedMixture).reduce(
+        (acc, v) => acc + (Number(v) || 0),
+        0
+      );
+      return {
+        ...prev,
+        domainMixture: updatedMixture,
+        totalTokensT: Number(newTotalTokens.toFixed(2)),
+      };
     });
   };
 
-  const applySplitPreset = (train: number, val: number, test: number) => {
+  // Master Dataset Scaler (Scales up to 1,000 TB NVMe ~ 312.5T tokens)
+  const handleMasterDatasetScale = (targetTokensT: number) => {
+    const clamped = Math.max(0.1, Math.min(350, Number(targetTokensT.toFixed(2))));
+    onChange((prev) => {
+      const currentSum = Object.values(prev.domainMixture).reduce(
+        (acc, v) => acc + (Number(v) || 0),
+        0
+      );
+      if (currentSum === 0) {
+        // Balanced frontier starter distribution
+        const updated: DomainMixture = {
+          webCrawl: Number((clamped * 0.35).toFixed(2)),
+          code: Number((clamped * 0.22).toFixed(2)),
+          math: Number((clamped * 0.15).toFixed(2)),
+          science: Number((clamped * 0.1).toFixed(2)),
+          syntheticCoT: Number((clamped * 0.1).toFixed(2)),
+          multilingual: Number((clamped * 0.04).toFixed(2)),
+          multimodal: Number((clamped * 0.04).toFixed(2)),
+        };
+        return { ...prev, domainMixture: updated, totalTokensT: clamped };
+      }
+      const ratio = clamped / currentSum;
+      const updated: DomainMixture = {
+        webCrawl: Number((prev.domainMixture.webCrawl * ratio).toFixed(2)),
+        code: Number((prev.domainMixture.code * ratio).toFixed(2)),
+        math: Number((prev.domainMixture.math * ratio).toFixed(2)),
+        science: Number((prev.domainMixture.science * ratio).toFixed(2)),
+        syntheticCoT: Number((prev.domainMixture.syntheticCoT * ratio).toFixed(2)),
+        multilingual: Number((prev.domainMixture.multilingual * ratio).toFixed(2)),
+        multimodal: Number((prev.domainMixture.multimodal * ratio).toFixed(2)),
+      };
+      return { ...prev, domainMixture: updated, totalTokensT: clamped };
+    });
+  };
+
+  // Preset mixtures based on real-world published frontier models
+  const applyMixturePreset = (preset: {
+    label: string;
+    tokens: DomainMixture;
+  }) => {
+    const sum = Object.values(preset.tokens).reduce((acc, v) => acc + v, 0);
+    onChange((prev) => ({
+      ...prev,
+      domainMixture: { ...preset.tokens },
+      totalTokensT: Number(sum.toFixed(2)),
+    }));
+  };
+
+  // Train / Validation / Test interactive split handlers
+  const handleTrainSplitChange = (newTrain: number) => {
+    const train = Math.max(50.0, Math.min(99.8, Number(newTrain.toFixed(1))));
+    const remaining = Number((100 - train).toFixed(1));
+    const currentOtherSum = config.valSplitPct + config.testSplitPct;
+    let val = Number((remaining * (config.valSplitPct / (currentOtherSum || 1))).toFixed(1));
+    let test = Number((remaining - val).toFixed(1));
+    if (val < 0.1) {
+      val = 0.1;
+      test = Number((remaining - 0.1).toFixed(1));
+    }
+    if (test < 0.1) {
+      test = 0.1;
+      val = Number((remaining - 0.1).toFixed(1));
+    }
     onChange((prev) => ({
       ...prev,
       trainSplitPct: train,
@@ -77,9 +138,58 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
     }));
   };
 
+  const handleValSplitChange = (newVal: number) => {
+    const val = Math.max(0.1, Math.min(25.0, Number(newVal.toFixed(1))));
+    const currentTrain = config.trainSplitPct;
+    const test = Math.max(0.1, Number((100 - currentTrain - val).toFixed(1)));
+    onChange((prev) => ({
+      ...prev,
+      valSplitPct: val,
+      testSplitPct: test,
+    }));
+  };
+
+  const handleTestSplitChange = (newTest: number) => {
+    const test = Math.max(0.1, Math.min(25.0, Number(newTest.toFixed(1))));
+    const currentTrain = config.trainSplitPct;
+    const val = Math.max(0.1, Number((100 - currentTrain - test).toFixed(1)));
+    onChange((prev) => ({
+      ...prev,
+      valSplitPct: val,
+      testSplitPct: test,
+    }));
+  };
+
+  const normalizeSplits = () => {
+    const sum = config.trainSplitPct + config.valSplitPct + config.testSplitPct;
+    if (sum <= 0) return;
+    const train = Number(((config.trainSplitPct / sum) * 100).toFixed(1));
+    const val = Number(((config.valSplitPct / sum) * 100).toFixed(1));
+    const test = Number((100 - train - val).toFixed(1));
+    onChange((prev) => ({
+      ...prev,
+      trainSplitPct: train,
+      valSplitPct: val,
+      testSplitPct: test,
+    }));
+  };
+
+  const splitSum = Number(
+    (config.trainSplitPct + config.valSplitPct + config.testSplitPct).toFixed(1)
+  );
+  const isSplitValid = Math.abs(splitSum - 100.0) < 0.15;
+
+  const trainTokens = Number(((totalTokensT * config.trainSplitPct) / 100).toFixed(2));
+  const valTokens = Number(((totalTokensT * config.valSplitPct) / 100).toFixed(2));
+  const testTokens = Number(((totalTokensT * config.testSplitPct) / 100).toFixed(2));
+
+  const trainDiskTB = Number(((econ.datasetStorageTB * config.trainSplitPct) / 100).toFixed(1));
+  const valDiskTB = Number(((econ.datasetStorageTB * config.valSplitPct) / 100).toFixed(1));
+  const testDiskTB = Number(((econ.datasetStorageTB * config.testSplitPct) / 100).toFixed(1));
+
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
+      {/* Top Stage Banner */}
       <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-emerald-400 font-mono text-xs uppercase tracking-wider">
@@ -87,7 +197,7 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
             <span>Stage 02 // Data Pipeline &amp; Alignment Curation</span>
           </div>
           <h2 className="text-lg sm:text-xl font-bold text-white mt-0.5">
-            Chinchilla Scaling, 7-Domain Mixture &amp; Post-Training RLVR Thinking Budget
+            Independent Real-World Mixture, 1,000 TB Sizing &amp; Custom Split Control
           </h2>
         </div>
 
@@ -112,14 +222,14 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Token Volume, Chinchilla Gauge, Splits, Decontamination & 7 Domain Sliders */}
+        {/* Left Column: Master Capacity Sizing, Train/Val/Test Splits & 7 Independent Domain Sliders */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Token Budget & Chinchilla Optimality Gauge */}
+          {/* Section 1: Master Dataset Sizing (Scales up to 1,000 TB NVMe) */}
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-400" />
-                <span>1. Token Volume &amp; Chinchilla Scaling Law</span>
+                <HardDrive className="w-4 h-4 text-emerald-400" />
+                <span>1. Master Dataset Capacity (Scalable to 1,000 TB NVMe)</span>
               </h3>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold border ${
@@ -136,66 +246,262 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-mono text-slate-300">
-                  Total Pre-Training Dataset Size (0.5T – 100T Tokens)
+                <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
+                  <span>Total Training Dataset Volume (0.5T – 312.5T Tokens • Up to 1,000 TB)</span>
                   <SettingTooltip id="totalTokensT" />
                 </label>
-                <span className="font-mono text-sm font-bold text-emerald-300">
-                  {config.totalTokensT.toFixed(1)} Trillion Tokens
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-emerald-300">
+                    {totalTokensT.toFixed(2)} Trillion Tokens
+                  </span>
+                  <span className="font-mono text-xs text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                    {econ.datasetStorageTB.toFixed(1)} TB NVMe
+                  </span>
+                </div>
               </div>
+
+              {/* Master Scaler Range Slider */}
               <input
                 type="range"
                 min={0.5}
-                max={100}
+                max={312.5}
                 step={0.5}
-                value={config.totalTokensT}
-                onChange={(e) =>
-                  onChange((prev) => ({
-                    ...prev,
-                    totalTokensT: Number(e.target.value),
-                  }))
-                }
+                value={Math.min(312.5, totalTokensT)}
+                onChange={(e) => handleMasterDatasetScale(Number(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
               />
-              <div className="flex justify-between text-[11px] font-mono text-slate-400 mt-1.5">
+
+              <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] font-mono text-slate-400 mt-2">
                 <span>Chinchilla 1x Baseline: {econ.chinchillaOptimalTokensT}T Tokens</span>
-                <span>Dataset Disk: {econ.datasetStorageTB.toFixed(1)} TB NVMe</span>
+                <span>Max Target NVMe Pool: 1,000.0 TB</span>
+              </div>
+
+              {/* Quick Scale Buttons */}
+              <div className="flex flex-wrap gap-1.5 pt-2">
+                {[
+                  { label: '8.0T (25 TB)', tokens: 8.0 },
+                  { label: '15.0T (48 TB • Llama 3)', tokens: 15.0 },
+                  { label: '18.0T (58 TB • Qwen 2.5)', tokens: 18.0 },
+                  { label: '35.0T (112 TB • Colossus)', tokens: 35.0 },
+                  { label: '100.0T (320 TB)', tokens: 100.0 },
+                  { label: '312.5T (1,000 TB Max)', tokens: 312.5 },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => handleMasterDatasetScale(item.tokens)}
+                    className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 transition hover:border-emerald-500/50"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Train / Validation / Test Custom Split Control */}
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                <span>2. Train, Validation &amp; Test Split (Fully Adjustable)</span>
+              </h3>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-semibold border ${
+                    isSplitValid
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                      : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  }`}
+                >
+                  {isSplitValid ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                  <span>Sum: {splitSum}%</span>
+                </span>
+                {!isSplitValid && (
+                  <button
+                    type="button"
+                    onClick={normalizeSplits}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/50 transition"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Auto-Normalize</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Train / Validation / Test Split + Decontamination Toggle */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
+            {/* Segmented Visual Split Bar */}
+            <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-950 p-0.5 border border-slate-800">
+              <div
+                style={{ width: `${Math.min(100, config.trainSplitPct)}%` }}
+                title={`Train: ${config.trainSplitPct}%`}
+                className="bg-emerald-400 h-full rounded-l-full transition-all"
+              />
+              <div
+                style={{ width: `${Math.min(100, config.valSplitPct)}%` }}
+                title={`Validation: ${config.valSplitPct}%`}
+                className="bg-amber-400 h-full transition-all"
+              />
+              <div
+                style={{ width: `${Math.min(100, config.testSplitPct)}%` }}
+                title={`Test / Holdout: ${config.testSplitPct}%`}
+                className="bg-cyan-400 h-full rounded-r-full transition-all"
+              />
+            </div>
+
+            {/* Split Sliders & Granular Direct Number Inputs */}
+            <div className="space-y-3.5 pt-1">
+              {/* Training Set Split Slider */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-emerald-300 font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                    <span>Training Set Split</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400">
+                      {trainTokens}T tok • {trainDiskTB} TB
+                    </span>
+                    <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
+                      <input
+                        type="number"
+                        min={50.0}
+                        max={99.8}
+                        step={0.1}
+                        value={config.trainSplitPct}
+                        onChange={(e) => handleTrainSplitChange(Number(e.target.value))}
+                        className="w-12 bg-transparent text-right font-mono font-bold text-emerald-300 text-xs focus:outline-none"
+                      />
+                      <span className="text-slate-400 text-xs font-mono">%</span>
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={50.0}
+                  max={99.8}
+                  step={0.1}
+                  value={config.trainSplitPct}
+                  onChange={(e) => handleTrainSplitChange(Number(e.target.value))}
+                  className="w-full accent-emerald-400 cursor-pointer h-1.5"
+                />
+              </div>
+
+              {/* Validation Set Split Slider */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-amber-300 font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                    <span>Validation Set Split</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400">
+                      {valTokens}T tok • {valDiskTB} TB
+                    </span>
+                    <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={25.0}
+                        step={0.1}
+                        value={config.valSplitPct}
+                        onChange={(e) => handleValSplitChange(Number(e.target.value))}
+                        className="w-12 bg-transparent text-right font-mono font-bold text-amber-300 text-xs focus:outline-none"
+                      />
+                      <span className="text-slate-400 text-xs font-mono">%</span>
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={25.0}
+                  step={0.1}
+                  value={config.valSplitPct}
+                  onChange={(e) => handleValSplitChange(Number(e.target.value))}
+                  className="w-full accent-amber-400 cursor-pointer h-1.5"
+                />
+              </div>
+
+              {/* Test / Holdout Set Split Slider */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
+                    <span>Test / Benchmark Holdout Split</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400">
+                      {testTokens}T tok • {testDiskTB} TB
+                    </span>
+                    <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={25.0}
+                        step={0.1}
+                        value={config.testSplitPct}
+                        onChange={(e) => handleTestSplitChange(Number(e.target.value))}
+                        className="w-12 bg-transparent text-right font-mono font-bold text-cyan-300 text-xs focus:outline-none"
+                      />
+                      <span className="text-slate-400 text-xs font-mono">%</span>
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={25.0}
+                  step={0.1}
+                  value={config.testSplitPct}
+                  onChange={(e) => handleTestSplitChange(Number(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer h-1.5"
+                />
+              </div>
+            </div>
+
+            {/* Split Presets & Benchmark Decontamination */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1.5">
-                  Train / Validation / Test Split (%)
-                  <SettingTooltip id="trainValTestSplit" />
+                <label className="block text-[11px] font-mono text-slate-400 mb-1.5">
+                  Split Presets (1-Click)
                 </label>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-3 gap-1">
                   {[
-                    { label: '98 / 1 / 1%', vals: [98, 1, 1] },
-                    { label: '96 / 2 / 2%', vals: [96, 2, 2] },
-                    { label: '94 / 3 / 3%', vals: [94, 3, 3] },
-                  ].map((preset) => {
-                    const active = config.trainSplitPct === preset.vals[0];
+                    { label: '98/1/1%', t: 98, v: 1, te: 1 },
+                    { label: '96/2/2%', t: 96, v: 2, te: 2 },
+                    { label: '95/2.5/2.5%', t: 95, v: 2.5, te: 2.5 },
+                    { label: '90/5/5%', t: 90, v: 5, te: 5 },
+                    { label: '80/10/10%', t: 80, v: 10, te: 10 },
+                    { label: '99/0.5/0.5%', t: 99, v: 0.5, te: 0.5 },
+                  ].map((p) => {
+                    const active =
+                      config.trainSplitPct === p.t &&
+                      config.valSplitPct === p.v &&
+                      config.testSplitPct === p.te;
                     return (
                       <button
-                        key={preset.label}
+                        key={p.label}
                         type="button"
                         onClick={() =>
-                          applySplitPreset(
-                            preset.vals[0],
-                            preset.vals[1],
-                            preset.vals[2]
-                          )
+                          onChange((prev) => ({
+                            ...prev,
+                            trainSplitPct: p.t,
+                            valSplitPct: p.v,
+                            testSplitPct: p.te,
+                          }))
                         }
-                        className={`py-2 px-2 rounded-xl font-mono text-[11px] font-semibold border transition ${
+                        className={`py-1.5 px-1 rounded-lg font-mono text-[10px] font-semibold border transition ${
                           active
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
                             : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
                         }`}
                       >
-                        {preset.label}
+                        {p.label}
                       </button>
                     );
                   })}
@@ -203,9 +509,8 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1.5">
+                <label className="block text-[11px] font-mono text-slate-400 mb-1.5">
                   Benchmark Decontamination Filter
-                  <SettingTooltip id="decontaminationFilter" />
                 </label>
                 <button
                   type="button"
@@ -227,9 +532,7 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
                     ) : (
                       <ShieldAlert className="w-4 h-4" />
                     )}
-                    {config.decontaminationFilter
-                      ? 'Active (N-Gram + Embedding Purge)'
-                      : 'Disabled (Leakage Risk -2.5 pts)'}
+                    {config.decontaminationFilter ? 'Active (Purged)' : 'Disabled (-2.5 pts)'}
                   </span>
                   <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-slate-950">
                     {config.decontaminationFilter ? 'ON' : 'OFF'}
@@ -239,99 +542,208 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
             </div>
           </div>
 
-          {/* 7 Domain Mixture Sliders totaling 100% */}
+          {/* Section 3: 7-Domain Pre-Training Mixture (Independent Real-World Tokens) */}
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                <span>2. 7-Domain Pre-Training Mixture (Auto-Balanced 100%)</span>
-              </h3>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChange((prev) => ({
-                      ...prev,
-                      domainMixture: {
-                        webCrawl: 18,
-                        code: 26,
-                        math: 20,
-                        science: 14,
-                        syntheticCoT: 14,
-                        multilingual: 4,
-                        multimodal: 4,
-                      },
-                    }))
-                  }
-                  className="px-2 py-1 rounded text-[10px] font-mono bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-slate-800"
-                >
-                  STEM &amp; Coding Heavy
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChange((prev) => ({
-                      ...prev,
-                      domainMixture: {
-                        webCrawl: 24,
-                        code: 22,
-                        math: 16,
-                        science: 12,
-                        syntheticCoT: 12,
-                        multilingual: 7,
-                        multimodal: 7,
-                      },
-                    }))
-                  }
-                  className="px-2 py-1 rounded text-[10px] font-mono bg-slate-950 hover:bg-slate-800 text-emerald-300 border border-slate-800"
-                >
-                  Balanced Frontier
-                </button>
+              <div>
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                  <Database className="w-4 h-4 text-cyan-400" />
+                  <span>3. 7-Domain Pre-Training Mixture (Independent Real-World Tokens)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Adjust each domain independently without affecting others. Total tokens updates automatically.
+                </p>
+              </div>
+
+              {/* Realistic Real-World Mixture Presets */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: 'Llama 3.1 15T',
+                    tokens: {
+                      webCrawl: 7.5,
+                      code: 3.0,
+                      math: 1.0,
+                      science: 0.5,
+                      syntheticCoT: 0.5,
+                      multilingual: 2.5,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'DeepSeek-V3 14.8T',
+                    tokens: {
+                      webCrawl: 6.0,
+                      code: 3.5,
+                      math: 2.2,
+                      science: 0.8,
+                      syntheticCoT: 1.6,
+                      multilingual: 0.7,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'Qwen 2.5 18T',
+                    tokens: {
+                      webCrawl: 7.0,
+                      code: 3.5,
+                      math: 2.5,
+                      science: 1.0,
+                      syntheticCoT: 1.0,
+                      multilingual: 3.0,
+                      multimodal: 0.0,
+                    },
+                  },
+                  {
+                    label: 'STEM & Reasoning Heavy',
+                    tokens: {
+                      webCrawl: 4.0,
+                      code: 6.0,
+                      math: 5.0,
+                      science: 3.0,
+                      syntheticCoT: 4.0,
+                      multilingual: 1.0,
+                      multimodal: 1.0,
+                    },
+                  },
+                  {
+                    label: '1,000 TB Max Pool',
+                    tokens: {
+                      webCrawl: 140.0,
+                      code: 50.0,
+                      math: 30.0,
+                      science: 25.0,
+                      syntheticCoT: 25.0,
+                      multilingual: 25.0,
+                      multimodal: 17.5,
+                    },
+                  },
+                  {
+                    label: 'Zero All (0T)',
+                    tokens: {
+                      webCrawl: 0,
+                      code: 0,
+                      math: 0,
+                      science: 0,
+                      syntheticCoT: 0,
+                      multilingual: 0,
+                      multimodal: 0,
+                    },
+                  },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => applyMixturePreset(preset)}
+                    className="px-2 py-1 rounded text-[10px] font-mono bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-slate-800 transition"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Stacked Visual Composition Bar */}
-            <div className="w-full h-3.5 rounded-full overflow-hidden flex bg-slate-950 p-0.5 border border-slate-800">
+            {/* Stacked Proportional Bar of Mixture */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                <span>Mixture Composition</span>
+                <span>{totalTokensT > 0 ? `Total: ${totalTokensT.toFixed(2)}T tokens (${econ.datasetStorageTB.toFixed(1)} TB)` : 'Corpus Empty (0.00T)'}</span>
+              </div>
+              <div className="w-full h-3.5 rounded-full overflow-hidden flex bg-slate-950 p-0.5 border border-slate-800">
+                {DOMAIN_META.map((d) => {
+                  const pct = pcts[d.key];
+                  if (pct <= 0) return null;
+                  return (
+                    <div
+                      key={d.key}
+                      style={{ width: `${pct}%` }}
+                      title={`${d.label}: ${pct}% (${tokens[d.key]}T tok)`}
+                      className={`${d.barClass} h-full first:rounded-l-full last:rounded-r-full transition-all`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 7 Independent Domain Sliders with Real-World Limits and Datasets */}
+            <div className="space-y-4 pt-1">
               {DOMAIN_META.map((d) => {
-                const pct = config.domainMixture[d.key];
-                if (pct <= 0) return null;
+                const currentT = tokens[d.key] || 0;
+                const currentPct = pcts[d.key] || 0;
+                const diskTB = Number((currentT * d.tbMultiplier).toFixed(1));
+
                 return (
                   <div
                     key={d.key}
-                    style={{ width: `${pct}%` }}
-                    title={`${d.label}: ${pct}%`}
-                    className={`${d.barClass} h-full first:rounded-l-full last:rounded-r-full transition-all`}
-                  />
-                );
-              })}
-            </div>
+                    className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2 hover:border-slate-700/80 transition"
+                  >
+                    {/* Domain Header: Label, Datasets & Telemetry */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
+                          <span className={d.color}>{d.label}</span>
+                          <SettingTooltip id={d.tooltipId} />
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500">
+                          {d.datasets}
+                        </div>
+                      </div>
 
-            <div className="space-y-3">
-              {DOMAIN_META.map((d) => {
-                const val = config.domainMixture[d.key];
-                const tokT = ((config.totalTokensT * val) / 100).toFixed(2);
-                return (
-                  <div key={d.key}>
-                    <div className="flex items-center justify-between text-xs font-mono mb-1">
-                      <span className={d.color}>
-                        {d.label}
-                        <SettingTooltip id={d.tooltipId} />
-                      </span>
-                      <span className="text-slate-200 font-bold">
-                        {val}% <span className="text-slate-500 font-normal">({tokT}T tok)</span>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-slate-400">
+                          {currentPct}% share • {diskTB} TB
+                        </span>
+                        <div className="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                          <input
+                            type="number"
+                            min={0}
+                            max={d.maxTokensT}
+                            step={d.stepTokensT}
+                            value={currentT}
+                            onChange={(e) =>
+                              handleDomainTokenChange(d.key, Number(e.target.value))
+                            }
+                            className="w-16 bg-transparent text-right font-mono font-bold text-white text-xs focus:outline-none"
+                          />
+                          <span className="text-slate-400 text-xs font-mono">T tok</span>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Independent Range Slider */}
                     <input
                       type="range"
                       min={0}
-                      max={70}
-                      step={1}
-                      value={val}
+                      max={d.maxTokensT}
+                      step={d.stepTokensT}
+                      value={currentT}
                       onChange={(e) =>
-                        handleDomainSlider(d.key, Number(e.target.value))
+                        handleDomainTokenChange(d.key, Number(e.target.value))
                       }
                       className="w-full accent-cyan-400 cursor-pointer h-1.5"
                     />
+
+                    {/* Quick Pick Real-World Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] font-mono text-slate-500">Quick:</span>
+                      {d.quickPicks.map((chip) => {
+                        const isMatch = Math.abs(currentT - chip.tokensT) < 0.05;
+                        return (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => handleDomainTokenChange(d.key, chip.tokensT)}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition ${
+                              isMatch
+                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                            }`}
+                          >
+                            {chip.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
@@ -339,13 +751,13 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Post-Training Alignment & RLVR Thinking Effort */}
+        {/* Right Column: Post-Training Alignment, RLVR Thinking Effort & Sub-Benchmark Profile */}
         <div className="lg:col-span-5 space-y-5">
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
                 <Brain className="w-4 h-4 text-amber-400" />
-                <span>3. Post-Training &amp; RLVR Thinking</span>
+                <span>4. Post-Training &amp; RLVR Thinking</span>
               </h3>
               <span className="text-xs font-mono text-amber-300">
                 Post-Train: {formatMoney(econ.postTrainingCostUSD)}
@@ -467,12 +879,42 @@ export const Module2DataPipeline: React.FC<Module2DataPipelineProps> = ({
 
             <div className="space-y-2.5 font-mono text-xs">
               {[
-                { label: 'Math & Olympiad (AIME / FrontierMath)', val: econ.subScores.math, color: 'bg-emerald-400' },
-                { label: 'Agentic Coding (SWE-Bench / LiveCode)', val: econ.subScores.coding, color: 'bg-cyan-400' },
-                { label: 'Scientific Reasoning (GPQA Diamond)', val: econ.subScores.science, color: 'bg-purple-400' },
-                { label: 'Long-Context Recall (RULER 1M)', val: econ.subScores.longContext, color: 'bg-amber-400' },
-                { label: 'Multilingual MMLU-Pro', val: econ.subScores.multilingual, color: 'bg-pink-400' },
-                { label: 'Multimodal Vision (MMMU-Pro)', val: econ.subScores.multimodal, color: 'bg-indigo-400' },
+                {
+                  label: 'Math & Olympiad (AIME / FrontierMath)',
+                  val: econ.subScores.math,
+                  color: 'bg-emerald-400',
+                  tokensT: tokens.math,
+                },
+                {
+                  label: 'Agentic Coding (SWE-Bench / LiveCode)',
+                  val: econ.subScores.coding,
+                  color: 'bg-cyan-400',
+                  tokensT: tokens.code,
+                },
+                {
+                  label: 'Scientific Reasoning (GPQA Diamond)',
+                  val: econ.subScores.science,
+                  color: 'bg-purple-400',
+                  tokensT: tokens.science,
+                },
+                {
+                  label: 'Long-Context Recall (RULER 1M)',
+                  val: econ.subScores.longContext,
+                  color: 'bg-amber-400',
+                  tokensT: null,
+                },
+                {
+                  label: 'Multilingual MMLU-Pro',
+                  val: econ.subScores.multilingual,
+                  color: 'bg-pink-400',
+                  tokensT: tokens.multilingual,
+                },
+                {
+                  label: 'Multimodal Vision (MMMU-Pro)',
+                  val: econ.subScores.multimodal,
+                  color: 'bg-indigo-400',
+                  tokensT: tokens.multimodal,
+                },
               ].map((b) => {
                 const isZero = b.val === 0;
                 return (

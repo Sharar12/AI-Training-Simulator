@@ -15,6 +15,24 @@ export interface DomainMixture {
   multimodal: number;
 }
 
+export interface DomainQuickPick {
+  label: string;
+  tokensT: number;
+}
+
+export interface DomainMetadata {
+  key: keyof DomainMixture;
+  label: string;
+  datasets: string;
+  tooltipId: string;
+  color: string;
+  barClass: string;
+  maxTokensT: number;
+  stepTokensT: number;
+  tbMultiplier: number;
+  quickPicks: DomainQuickPick[];
+}
+
 export interface SimulatorConfig {
   modelName: string;
   license: 'Proprietary' | 'Open Weights';

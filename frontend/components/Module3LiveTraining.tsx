@@ -30,7 +30,7 @@ import {
   TrainingEventAlert,
 } from '../types/simulator';
 import { GPU_SPECS, TRAINING_EVENTS } from '../data/constants';
-import { formatTrainingDuration } from '../lib/simulationEngine';
+import { formatTrainingDuration, normalizeDomainMixture } from '../lib/simulationEngine';
 import { SettingTooltip } from './SettingTooltip';
 
 interface Module3LiveTrainingProps {
@@ -50,6 +50,10 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
   onCompleteRun,
   onPrevStage,
 }) => {
+  const { tokens: dTokens, pcts: dPcts, totalTokensT: activeTokensT } = normalizeDomainMixture(
+    config.domainMixture,
+    config.totalTokensT
+  );
   const [progress, setProgress] = useState<number>(100);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [simSpeed, setSimSpeed] = useState<1 | 5 | 20>(5);
@@ -443,8 +447,8 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
               </h3>
               <p className="text-[11px] font-mono text-slate-400">
                 Active Stage: <strong className="text-cyan-300">{currentPoint.stage}</strong> • Progress:{' '}
-                <strong className="text-white">{progress}%</strong> ({((config.totalTokensT * progress) / 100).toFixed(2)}T /{' '}
-                {config.totalTokensT}T Tokens)
+                <strong className="text-white">{progress}%</strong> ({((activeTokensT * progress) / 100).toFixed(2)}T /{' '}
+                {activeTokensT}T Tokens)
               </p>
             </div>
 
@@ -559,24 +563,21 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
         <div className="lg:col-span-4 space-y-5">
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <h3 className="text-xs font-bold text-white font-mono uppercase tracking-wider border-b border-slate-800 pb-2.5">
-              Per-Category Token Ingestion ({((config.totalTokensT * progress) / 100).toFixed(2)}T Ingested)
+              Per-Category Token Ingestion ({((activeTokensT * progress) / 100).toFixed(2)}T Ingested)
             </h3>
 
             <div className="space-y-2.5 font-mono text-xs">
               {[
-                { label: 'Web Crawl', pct: config.domainMixture.webCrawl, cls: 'bg-slate-400' },
-                { label: 'Code / GitHub', pct: config.domainMixture.code, cls: 'bg-cyan-400' },
-                { label: 'Math / Proofs', pct: config.domainMixture.math, cls: 'bg-emerald-400' },
-                { label: 'Science / ArXiv', pct: config.domainMixture.science, cls: 'bg-purple-400' },
-                { label: 'Synthetic CoT', pct: config.domainMixture.syntheticCoT, cls: 'bg-amber-400' },
-                { label: 'Multilingual', pct: config.domainMixture.multilingual, cls: 'bg-pink-400' },
-                { label: 'Multimodal', pct: config.domainMixture.multimodal, cls: 'bg-indigo-400' },
+                { label: 'Web Crawl', tok: dTokens.webCrawl, pct: dPcts.webCrawl, cls: 'bg-slate-400' },
+                { label: 'Code / GitHub', tok: dTokens.code, pct: dPcts.code, cls: 'bg-cyan-400' },
+                { label: 'Math / Proofs', tok: dTokens.math, pct: dPcts.math, cls: 'bg-emerald-400' },
+                { label: 'Science / ArXiv', tok: dTokens.science, pct: dPcts.science, cls: 'bg-purple-400' },
+                { label: 'Synthetic CoT', tok: dTokens.syntheticCoT, pct: dPcts.syntheticCoT, cls: 'bg-amber-400' },
+                { label: 'Multilingual', tok: dTokens.multilingual, pct: dPcts.multilingual, cls: 'bg-pink-400' },
+                { label: 'Multimodal', tok: dTokens.multimodal, pct: dPcts.multimodal, cls: 'bg-indigo-400' },
               ].map((cat) => {
-                const ingestedT = (
-                  (config.totalTokensT * (cat.pct / 100) * progress) /
-                  100
-                ).toFixed(2);
-                const totalCatT = (config.totalTokensT * (cat.pct / 100)).toFixed(2);
+                const ingestedT = ((cat.tok * progress) / 100).toFixed(2);
+                const totalCatT = cat.tok.toFixed(2);
                 return (
                   <div key={cat.label}>
                     <div className="flex justify-between text-[11px] mb-1">

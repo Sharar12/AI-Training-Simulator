@@ -4,8 +4,76 @@ import {
   PrecisionType,
   OptimizerType,
   RlvrEffortType,
+  DomainMixture,
 } from '../types/simulator';
 import { GPU_SPECS } from '../data/constants';
+
+export function normalizeDomainMixture(
+  mixture: DomainMixture,
+  fallbackTotalTokensT: number
+): {
+  tokens: DomainMixture;
+  pcts: DomainMixture;
+  totalTokensT: number;
+} {
+  const keys: (keyof DomainMixture)[] = [
+    'webCrawl',
+    'code',
+    'math',
+    'science',
+    'syntheticCoT',
+    'multilingual',
+    'multimodal',
+  ];
+
+  const rawSum = keys.reduce((acc, k) => acc + (Number(mixture[k]) || 0), 0);
+
+  // If rawSum is ~100 (legacy percentage scale) and differs substantially from fallback total, adapt legacy
+  const isLegacyPercentage =
+    rawSum >= 95 && rawSum <= 105 && Math.abs(rawSum - fallbackTotalTokensT) > 2.0;
+
+  let tokens: DomainMixture;
+  let totalTokensT: number;
+
+  if (isLegacyPercentage) {
+    tokens = {
+      webCrawl: Number(((mixture.webCrawl / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      code: Number(((mixture.code / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      math: Number(((mixture.math / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      science: Number(((mixture.science / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      syntheticCoT: Number(((mixture.syntheticCoT / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      multilingual: Number(((mixture.multilingual / rawSum) * fallbackTotalTokensT).toFixed(2)),
+      multimodal: Number(((mixture.multimodal / rawSum) * fallbackTotalTokensT).toFixed(2)),
+    };
+    totalTokensT = fallbackTotalTokensT;
+  } else {
+    tokens = {
+      webCrawl: Math.max(0, Number(mixture.webCrawl) || 0),
+      code: Math.max(0, Number(mixture.code) || 0),
+      math: Math.max(0, Number(mixture.math) || 0),
+      science: Math.max(0, Number(mixture.science) || 0),
+      syntheticCoT: Math.max(0, Number(mixture.syntheticCoT) || 0),
+      multilingual: Math.max(0, Number(mixture.multilingual) || 0),
+      multimodal: Math.max(0, Number(mixture.multimodal) || 0),
+    };
+    const sum = keys.reduce((acc, k) => acc + tokens[k], 0);
+    totalTokensT = sum > 0 ? Number(sum.toFixed(2)) : fallbackTotalTokensT;
+  }
+
+  const effectiveSum = keys.reduce((acc, k) => acc + tokens[k], 0);
+
+  const pcts: DomainMixture = {
+    webCrawl: effectiveSum > 0 ? Number(((tokens.webCrawl / effectiveSum) * 100).toFixed(1)) : 0,
+    code: effectiveSum > 0 ? Number(((tokens.code / effectiveSum) * 100).toFixed(1)) : 0,
+    math: effectiveSum > 0 ? Number(((tokens.math / effectiveSum) * 100).toFixed(1)) : 0,
+    science: effectiveSum > 0 ? Number(((tokens.science / effectiveSum) * 100).toFixed(1)) : 0,
+    syntheticCoT: effectiveSum > 0 ? Number(((tokens.syntheticCoT / effectiveSum) * 100).toFixed(1)) : 0,
+    multilingual: effectiveSum > 0 ? Number(((tokens.multilingual / effectiveSum) * 100).toFixed(1)) : 0,
+    multimodal: effectiveSum > 0 ? Number(((tokens.multimodal / effectiveSum) * 100).toFixed(1)) : 0,
+  };
+
+  return { tokens, pcts, totalTokensT: totalTokensT > 0 ? totalTokensT : fallbackTotalTokensT };
+}
 
 export function formatMoney(usd: number): string {
   if (usd >= 1e9) return `$${(usd / 1e9).toFixed(2)}B`;
@@ -41,6 +109,11 @@ export function calculateHardwareAndEconomics(
   eventBonusIndex: number = 0
 ): EconomicsBreakdown {
   const gpu = GPU_SPECS[config.gpuType];
+
+  const { tokens: dTokens, pcts: dPcts, totalTokensT: activeTokensT } = normalizeDomainMixture(
+    config.domainMixture,
+    config.totalTokensT
+  );
 
   // 1. Effective Active Parameters
   const effectiveRatio =
@@ -107,9 +180,9 @@ export function calculateHardwareAndEconomics(
   const trainingSystemRamTB = Number((trainingVramTB * 1.5).toFixed(2));
   const trainingCpuCores = config.gpuCount * 16; // 128 cores per 8-GPU node
 
-  // Dataset storage: ~2.8 TB per Trillion tokens + multimodal multiplier
-  const tbPerTrillion = 2.6 + (config.domainMixture.multimodal / 100) * 1.8;
-  const datasetStorageTB = config.totalTokensT * tbPerTrillion;
+  // Dataset storage: ~2.8 TB per Trillion tokens + multimodal multiplier (comfortably scales up to 1000 TB+)
+  const tbPerTrillion = 2.6 + (dPcts.multimodal / 100) * 1.8;
+  const datasetStorageTB = activeTokensT * tbPerTrillion;
   // Rolling NVMe Checkpoint Storage: 5x full model + optimizer state snapshots
   const singleCheckpointTB = (totalParamsB * (weightBytesPerParam + optBytesPerParam)) / 1024;
   const checkpointStorageTB = singleCheckpointTB * 5;
@@ -117,7 +190,7 @@ export function calculateHardwareAndEconomics(
   const trainingTotalStoragePB = trainingTotalStorageTB / 1024;
 
   // A. Total Cost to Make (Build CapEx / OpEx Breakdown)
-  const effectiveTrainTokensT = config.totalTokensT * (config.trainSplitPct / 100);
+  const effectiveTrainTokensT = activeTokensT * (config.trainSplitPct / 100);
   // Long-context annealing adds ~8% to 25% extra FLOPs for >128K windows
   const contextFlopMultiplier =
     1.0 + Math.max(0, Math.log10(Math.max(1, config.contextWindowK / 64))) * 0.12 * attnMemoryFactor;
@@ -151,15 +224,15 @@ export function calculateHardwareAndEconomics(
 
   // Data Acquisition & Synthetic Generation Cost ($)
   const stemShare =
-    (config.domainMixture.code + config.domainMixture.math + config.domainMixture.science) / 100;
-  const synthShare = config.domainMixture.syntheticCoT / 100;
-  const multimodalShare = config.domainMixture.multimodal / 100;
+    (dPcts.code + dPcts.math + dPcts.science) / 100;
+  const synthShare = dPcts.syntheticCoT / 100;
+  const multimodalShare = dPcts.multimodal / 100;
 
-  const baseDataCost = config.totalTokensT * 42000;
-  const stemDataCost = config.totalTokensT * stemShare * 185000;
-  const synthDataCost = config.totalTokensT * synthShare * 860000;
-  const mmDataCost = config.totalTokensT * multimodalShare * 210000;
-  const decontamCost = config.decontaminationFilter ? 120000 + config.totalTokensT * 14000 : 0;
+  const baseDataCost = activeTokensT * 42000;
+  const stemDataCost = activeTokensT * stemShare * 185000;
+  const synthDataCost = activeTokensT * synthShare * 860000;
+  const mmDataCost = activeTokensT * multimodalShare * 210000;
+  const decontamCost = config.decontaminationFilter ? 120000 + activeTokensT * 14000 : 0;
   const dataAcquisitionCostUSD =
     baseDataCost + stemDataCost + synthDataCost + mmDataCost + decontamCost;
 
@@ -327,10 +400,9 @@ export function calculateHardwareAndEconomics(
   const reasoningCapacityFactor = Math.min(1.0, Math.max(0.08, Math.pow(capB / 16, 0.65)));
 
   // Domain mixture quality bonus
-  const m = config.domainMixture;
-  const stemBalance = Math.min(4.2, (m.code * 0.08 + m.math * 0.09 + m.science * 0.07));
-  const synthBonus = Math.min(4.5, Math.pow(m.syntheticCoT, 0.78) * 0.36) * reasoningCapacityFactor;
-  const webPenalty = m.webCrawl < 12 ? -2.2 : m.webCrawl > 65 ? -1.8 : 0.4;
+  const stemBalance = Math.min(4.2, (dPcts.code * 0.08 + dPcts.math * 0.09 + dPcts.science * 0.07));
+  const synthBonus = Math.min(4.5, Math.pow(dPcts.syntheticCoT, 0.78) * 0.36) * reasoningCapacityFactor;
+  const webPenalty = dPcts.webCrawl < 8 ? -2.2 : dPcts.webCrawl > 70 ? -1.8 : 0.4;
 
   // Precision & Optimizer & Attention deltas
   const precisionDelta =
@@ -438,24 +510,24 @@ export function calculateHardwareAndEconomics(
   if (config.optimizer === 'Muon') stability += 4;
   const stabilityScore = Math.min(99, Math.max(42, stability));
 
-  // Sub-scores (0-100 scale, realistically conditioned on data exposure)
-  // If a model has 0% training data in a specialized domain, its performance in that domain collapses.
-  const mathDataTokens = m.math + m.syntheticCoT * 0.65 + m.science * 0.12 + m.webCrawl * 0.03;
-  const mathExposure = Math.min(1.0, mathDataTokens / 16.0);
+  // Sub-scores (0-100 scale, realistically conditioned on domain token exposure)
+  // If a model has 0.0T training data in a specialized domain, its performance in that domain collapses.
+  const mathDataTokens = dTokens.math + dTokens.syntheticCoT * 0.65 + dTokens.science * 0.12 + dTokens.webCrawl * 0.03;
+  const mathExposure = Math.min(1.0, mathDataTokens / 2.5);
 
-  const codeDataTokens = m.code + m.syntheticCoT * 0.45 + m.webCrawl * 0.04;
-  const codeExposure = Math.min(1.0, codeDataTokens / 20.0);
+  const codeDataTokens = dTokens.code + dTokens.syntheticCoT * 0.45 + dTokens.webCrawl * 0.04;
+  const codeExposure = Math.min(1.0, codeDataTokens / 3.5);
 
-  const scienceDataTokens = m.science + m.syntheticCoT * 0.45 + m.math * 0.2 + m.webCrawl * 0.15;
-  const scienceExposure = Math.min(1.0, scienceDataTokens / 14.0);
+  const scienceDataTokens = dTokens.science + dTokens.syntheticCoT * 0.45 + dTokens.math * 0.2 + dTokens.webCrawl * 0.15;
+  const scienceExposure = Math.min(1.0, scienceDataTokens / 2.0);
 
   // Even without dedicated multilingual data, English/web models have slight cross-lingual transfer (~6%)
-  const multiDataTokens = m.multilingual + m.webCrawl * 0.25;
-  const multiExposure = Math.min(1.0, (m.multilingual > 0 ? 0.15 : 0.06) + multiDataTokens / 12.0);
+  const multiDataTokens = dTokens.multilingual + dTokens.webCrawl * 0.25;
+  const multiExposure = Math.min(1.0, (dTokens.multilingual > 0 ? 0.15 : 0.06) + multiDataTokens / 3.0);
 
   // Multimodal Vision strictly requires interleaved multimodal visual tokens (images/videos)
   // Text-only models without vision tokens cannot process visual inputs (0.0% vision capability)
-  const mmExposure = m.multimodal > 0 ? Math.min(1.0, Math.pow(m.multimodal / 7.0, 0.75)) : 0.0;
+  const mmExposure = dTokens.multimodal > 0 ? Math.min(1.0, Math.pow(dTokens.multimodal / 2.0, 0.75)) : 0.0;
 
   // Long-context scales with sequence window size (8K baseline up to 1M+)
   const contextExposure = Math.min(

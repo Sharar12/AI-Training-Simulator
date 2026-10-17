@@ -227,6 +227,10 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                   </button>
                 ))}
               </div>
+              <div className="flex justify-between text-[11px] font-mono text-slate-400 mt-2">
+                <span>Model Weights: {(econ.inferenceWeightGB / 1024).toFixed(2)} TB</span>
+                <span>Rolling Checkpoint Pool: {econ.checkpointStorageTB.toFixed(1)} TB NVMe</span>
+              </div>
             </div>
 
             {/* MoE Active Parameter Ratio Slider */}
