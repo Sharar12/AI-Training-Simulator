@@ -11,6 +11,7 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  Cloud,
 } from 'lucide-react';
 import { SimulatorConfig, EconomicsBreakdown } from '../types/simulator';
 import { GPU_SPECS } from '../data/constants';
@@ -91,6 +92,18 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
             <span className="text-slate-400">Build Total: </span>
             <span className="text-emerald-400 font-bold">
               {formatMoney(econ.grandTotalBuildCostUSD)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-950/80 border border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.35)]">
+            <span className="text-cyan-400 font-bold flex items-center gap-1">
+              <Cloud className="w-3.5 h-3.5" />
+              Online Rent:
+            </span>
+            <span className="text-cyan-100 font-bold">
+              {formatMoney(econ.procurement.cloudRentalTotalUSD)}
+            </span>
+            <span className="text-[10px] text-cyan-300 font-semibold bg-cyan-500/20 px-1 py-0.2 rounded border border-cyan-500/30">
+              {formatMoney(econ.procurement.cloudRentalHourlyUSD)}/hr
             </span>
           </div>
           <div className="flex items-center gap-1">
@@ -185,14 +198,35 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
                     {formatMoney(econ.powerCoolingCostUSD)} ({Math.round(econ.totalEnergyMWh).toLocaleString()} MWh)
                   </span>
                 </div>
-                <div className="mt-2 pt-1.5 border-t border-slate-800/70 space-y-1">
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-cyan-400 font-semibold">☁️ Cloud Rental:</span>
-                    <span className="text-cyan-200 font-bold">{formatMoney(econ.procurement.cloudRentalTotalUSD)} ({formatMoney(econ.procurement.cloudRentalHourlyUSD)}/hr)</span>
+                <div className="mt-2.5 pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-cyan-950/50 border-2 border-cyan-400/80 shadow-[0_0_20px_rgba(6,182,212,0.3)]">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5 font-mono">
+                        <Cloud className="w-4 h-4 text-cyan-400 animate-pulse" />
+                        <span>Online Cloud Rental</span>
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-cyan-400/20 text-cyan-300 font-bold font-mono uppercase tracking-wider border border-cyan-400/40">
+                        Active Mode
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between font-mono">
+                      <span className="text-[11px] text-slate-300">Run Compute Cost:</span>
+                      <span className="text-base font-extrabold text-cyan-200">
+                        {formatMoney(econ.procurement.cloudRentalTotalUSD)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-cyan-400/90 font-mono mt-0.5 pt-1 border-t border-cyan-500/20">
+                      <span>Rate: <strong className="text-white">{formatMoney(econ.procurement.cloudRentalHourlyUSD)}/hr</strong></span>
+                      <span className="text-emerald-400 font-semibold">$0 Upfront CapEx</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-purple-400 font-semibold">🏢 Owned CapEx:</span>
-                    <span className="text-amber-300 font-bold">{formatMoney(econ.procurement.ownedHardwareCapExUSD)} (Breakeven: {econ.procurement.breakevenMonths} Mo)</span>
+
+                  <div className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 flex justify-between items-center font-mono text-[10px]">
+                    <span className="text-purple-300 font-medium">🏢 Owned Hardware CapEx:</span>
+                    <span className="text-amber-300 font-bold">
+                      {formatMoney(econ.procurement.ownedHardwareCapExUSD)}
+                      <span className="text-slate-400 font-normal ml-1">({econ.procurement.breakevenMonths} Mo breakeven)</span>
+                    </span>
                   </div>
                 </div>
               </div>
