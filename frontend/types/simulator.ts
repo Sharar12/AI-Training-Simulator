@@ -1,6 +1,7 @@
 export type ParadigmType =
   | 'Dense'
   | 'Sparse MoE'
+  | 'DeepSeek-V4.1 Flash'
   | 'DeepSeek-V3 MoE'
   | 'Hybrid Mamba-Transformer';
 export type AttentionType = 'MLA' | 'GQA' | 'MHA';

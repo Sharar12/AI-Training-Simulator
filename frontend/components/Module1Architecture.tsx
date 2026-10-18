@@ -145,13 +145,14 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                 {(
                   [
                     {
-                      id: 'DeepSeek-V3 MoE',
-                      title: 'DeepSeek-V3 MoE (Frontier Efficiency)',
-                      desc: '256 Fine-Grained Micro-Experts (8 routed + 1 shared) • Multi-Token Prediction (MTP) • DualPipe Overlap',
+                      id: 'DeepSeek-V4.1 Flash',
+                      title: 'DeepSeek 4.1 Flash (CED + Asymmetric MoE)',
+                      desc: 'Causal Encoder-Decoder (20 enc + 20 dec) • Asymmetric 8B-prefill / 16B-decode • Projected KV Cache (~890B/tok) • Native Multimodal',
                       badges: [
-                        { text: '+🧠 +0.85 AA Intelligence', cls: 'text-purple-300 border-purple-500/40 bg-purple-500/15' },
-                        { text: '+⚡ +75% Decode Speed', cls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/15' },
-                        { text: '+💰 62% Cost Saver', cls: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/15' },
+                        { text: '+🧠 +1.15 AA Intelligence', cls: 'text-purple-300 border-purple-500/40 bg-purple-500/15' },
+                        { text: '+⚡ +195% Decode Speed', cls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/15' },
+                        { text: '+⚡ -65% Prefill TTFT', cls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/15' },
+                        { text: '+💰 -85% KV-Cache Footprint', cls: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/15' },
                       ],
                     },
                     {
@@ -193,14 +194,20 @@ export const Module1Architecture: React.FC<Module1ArchitectureProps> = ({
                       onChange((prev) => ({
                         ...prev,
                         paradigm: item.id,
+                        totalParamsB:
+                          item.id === 'DeepSeek-V4.1 Flash' && prev.totalParamsB === 1000
+                            ? 552
+                            : prev.totalParamsB,
                         activeParamRatio:
                           item.id === 'Dense'
                             ? 1.0
-                            : item.id === 'DeepSeek-V3 MoE'
-                              ? 0.055
-                              : prev.activeParamRatio === 1.0
-                                ? 0.08
-                                : prev.activeParamRatio,
+                            : item.id === 'DeepSeek-V4.1 Flash'
+                              ? 0.029 // ~16B decode active out of 552B (~2.9%)
+                              : item.id === 'DeepSeek-V3 MoE'
+                                ? 0.055
+                                : prev.activeParamRatio === 1.0
+                                  ? 0.08
+                                  : prev.activeParamRatio,
                       }))
                     }
                     className={`p-3 rounded-xl text-left border transition relative flex flex-col justify-between ${

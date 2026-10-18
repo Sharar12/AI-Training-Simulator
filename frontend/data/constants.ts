@@ -98,13 +98,14 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
   },
   paradigm: {
     id: 'paradigm',
-    title: 'Architecture Paradigm (Dense vs. Sparse MoE vs. DeepSeek-V3 MoE vs. Hybrid)',
+    title: 'Architecture Paradigm (Dense vs. Sparse MoE vs. DeepSeek-V4.1 Flash vs. Hybrid)',
     whatItIs: 'Defines how token representations route through feed-forward layers, expert routers, and sequence state blocks during prefill and decoding.',
-    increasingEffect: 'Selecting DeepSeek-V3 MoE (256 fine-grained micro-experts, DualPipe overlap, Multi-Token Prediction) or Sparse MoE decouples capacity from FLOPs, boosting Output Speed by 2.2x–4.5x and slashing serving cost.',
+    increasingEffect: 'Selecting DeepSeek-V4.1 Flash (Asymmetric Causal Encoder-Decoder CED with 8B prefill / 16B decode, CSA2 KV compression, and MTP) cuts TTFT and prefill compute by 60%+ while delivering 1.95x generation speedup.',
     increasingTags: [
-      { label: '+150% to +350% tok/s', tone: 'positive' },
-      { label: '-65% FLOPs/tok', tone: 'positive' },
-      { label: '+MTP Self-Speculation', tone: 'positive' },
+      { label: '+195% Decode Speed', tone: 'positive' },
+      { label: '-65% Prefill TTFT', tone: 'positive' },
+      { label: '-85% KV-Cache Footprint', tone: 'positive' },
+      { label: '+CED Asymmetric MoE', tone: 'positive' },
     ],
     decreasingEffect: 'Using a monolithic Dense Transformer maximizes per-parameter utilization and training stability, but activates 100% of weights on every token.',
     decreasingTags: [
@@ -518,16 +519,16 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipSpec> = {
 
 export const PRESET_BLUEPRINTS: { label: string; badge: string; config: SimulatorConfig }[] = [
   {
-    label: 'DeepSeek-V3.2 MoE (256-Expert + MTP)',
+    label: 'DeepSeek-V4.1-Flash (CED + Asymmetric MoE)',
     badge: 'Peak Architecture Efficiency',
     config: {
-      modelName: 'DeepSeek-V3.2 MoE (MTP)',
+      modelName: 'DeepSeek-V4.1-Flash (CED-MTP)',
       license: 'Open Weights',
-      paradigm: 'DeepSeek-V3 MoE',
-      totalParamsB: 671,
-      activeParamRatio: 0.055, // ~37B active out of 671B
+      paradigm: 'DeepSeek-V4.1 Flash',
+      totalParamsB: 552,
+      activeParamRatio: 0.029, // ~16B active on decode / ~8B on prefill out of 552B
       attention: 'MLA',
-      contextWindowK: 128,
+      contextWindowK: 1000, // 1M tokens context window
       precision: 'FP8',
       optimizer: 'Muon',
       gpuType: 'H100',
@@ -545,7 +546,7 @@ export const PRESET_BLUEPRINTS: { label: string; badge: string; config: Simulato
         booksHistory: 0.8,
         syntheticCoT: 1.0,
         multilingual: 0.6,
-        multimodal: 0.0,
+        multimodal: 1.2, // Native multimodal visual integration
       },
       sftRounds: 3,
       rlhfAlignment: 3,

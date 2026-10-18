@@ -124,11 +124,13 @@ export function calculateHardwareAndEconomics(
   const effectiveRatio =
     config.paradigm === 'Dense'
       ? 1.0
-      : config.paradigm === 'DeepSeek-V3 MoE'
-        ? Math.max(0.02, Math.min(1.0, config.activeParamRatio)) // Fine-grained 256 micro-experts (8 routed + 1 shared)
-        : config.paradigm === 'Sparse MoE'
-          ? Math.max(0.02, Math.min(1.0, config.activeParamRatio))
-          : Math.max(0.15, Math.min(1.0, config.activeParamRatio * 0.85));
+      : config.paradigm === 'DeepSeek-V4.1 Flash'
+        ? Math.max(0.015, Math.min(1.0, config.activeParamRatio)) // Asymmetric Causal Encoder-Decoder: ~8B prefill / ~16B decode out of 552B (~2.9%)
+        : config.paradigm === 'DeepSeek-V3 MoE'
+          ? Math.max(0.02, Math.min(1.0, config.activeParamRatio)) // Fine-grained 256 micro-experts (8 routed + 1 shared)
+          : config.paradigm === 'Sparse MoE'
+            ? Math.max(0.02, Math.min(1.0, config.activeParamRatio))
+            : Math.max(0.15, Math.min(1.0, config.activeParamRatio * 0.85));
 
   const activeParamsB = Number((config.totalParamsB * effectiveRatio).toFixed(2));
   const totalParamsB = config.totalParamsB;
@@ -168,11 +170,13 @@ export function calculateHardwareAndEconomics(
   const attnMemoryFactor =
     config.attention === 'MLA' ? 0.16 : config.attention === 'GQA' ? 0.32 : 1.0;
   const paradigmKvFactor =
-    config.paradigm === 'DeepSeek-V3 MoE'
-      ? 0.22 // Native low-rank MLA KV compression
-      : config.paradigm === 'Hybrid Mamba-Transformer'
-        ? 0.55
-        : 1.0;
+    config.paradigm === 'DeepSeek-V4.1 Flash'
+      ? 0.15 // Projected Encoder KV Cache + CSA2 + FP4 KV Caching (~890 bytes/token)
+      : config.paradigm === 'DeepSeek-V3 MoE'
+        ? 0.22 // Native low-rank MLA KV compression
+        : config.paradigm === 'Hybrid Mamba-Transformer'
+          ? 0.55
+          : 1.0;
 
   // B. Hardware Required TO TRAIN
   const rawModelStateGB =
@@ -229,6 +233,7 @@ export function calculateHardwareAndEconomics(
   let baseMfu = 0.46;
   if (config.gpuType === 'B200') baseMfu += 0.05;
   if (config.paradigm === 'Sparse MoE') baseMfu -= 0.035; // All-to-All EP dispatch overhead
+  if (config.paradigm === 'DeepSeek-V4.1 Flash') baseMfu += 0.048; // DualPipe + Asymmetric Causal Encoder-Decoder
   if (config.paradigm === 'DeepSeek-V3 MoE') baseMfu += 0.04; // DualPipe compute-communication overlap + native MLA
   if (config.attention === 'MLA') baseMfu += 0.025;
   if (config.optimizer === 'Muon') baseMfu += 0.015;
@@ -397,13 +402,15 @@ export function calculateHardwareAndEconomics(
   const inputTokenPricePer1M = Number(Math.max(0.04, rawInputPrice).toFixed(2));
 
   const decodeMultiplier =
-    config.paradigm === 'DeepSeek-V3 MoE'
-      ? 2.1 // Multi-Token Prediction (MTP) speculative self-decoding slashes generation costs
-      : config.paradigm === 'Sparse MoE'
-        ? 3.8 + (totalParamsB / Math.max(1, activeParamsB)) * 0.04
-        : config.paradigm === 'Hybrid Mamba-Transformer'
-          ? 3.4
-          : 4.5;
+    config.paradigm === 'DeepSeek-V4.1 Flash'
+      ? 1.75 // Multi-Token Prediction (MTP) + Asymmetric 16B decode slashes generation costs
+      : config.paradigm === 'DeepSeek-V3 MoE'
+        ? 2.1 // Multi-Token Prediction (MTP) speculative self-decoding slashes generation costs
+        : config.paradigm === 'Sparse MoE'
+          ? 3.8 + (totalParamsB / Math.max(1, activeParamsB)) * 0.04
+          : config.paradigm === 'Hybrid Mamba-Transformer'
+            ? 3.4
+            : 4.5;
   const outputTokenPricePer1M = Number(
     Math.max(0.15, inputTokenPricePer1M * Math.min(5.2, decodeMultiplier)).toFixed(2)
   );
@@ -460,17 +467,20 @@ export function calculateHardwareAndEconomics(
 
   // Architecture Paradigm bonus / trade-off:
   // - Dense Transformer: +1.6 bonus (full parameter update per token, zero routing noise, peak representation density)
+  // - DeepSeek-V4.1 Flash: +1.15 bonus (Causal Encoder-Decoder CED representation density + MTP auxiliary supervision + RL self-feedback loops)
   // - DeepSeek-V3 MoE: +0.85 bonus (Multi-Token Prediction creates denser training supervisory signal, 256 fine-grained micro-experts)
   // - Sparse MoE: 0.0 baseline (heavily conditioned on active parameter ratio)
   // - Hybrid Mamba-Attn: -0.9 on complex multi-hop reasoning due to linear state compression, but gives +32% tok/s boost
   const paradigmDelta =
     config.paradigm === 'Dense'
       ? 1.6
-      : config.paradigm === 'DeepSeek-V3 MoE'
-        ? 0.85
-        : config.paradigm === 'Sparse MoE'
-          ? 0.0
-          : -0.9;
+      : config.paradigm === 'DeepSeek-V4.1 Flash'
+        ? 1.15
+        : config.paradigm === 'DeepSeek-V3 MoE'
+          ? 0.85
+          : config.paradigm === 'Sparse MoE'
+            ? 0.0
+            : -0.9;
 
   // Token scaling contribution
   let tokenDelta = 0;
@@ -558,13 +568,15 @@ export function calculateHardwareAndEconomics(
               ? 1.0
               : 0.52;
   const paradigmSpeedBoost =
-    config.paradigm === 'DeepSeek-V3 MoE'
-      ? 1.75 // Multi-Token Prediction (MTP) speculative decode + 8/256 sparsity
-      : config.paradigm === 'Hybrid Mamba-Transformer'
-        ? 1.32
-        : config.paradigm === 'Sparse MoE'
-          ? 1.18
-          : 1.0;
+    config.paradigm === 'DeepSeek-V4.1 Flash'
+      ? 1.95 // Asymmetric 8B-prefill / 16B-decode + MTP speculative self-acceptance (near 2x speed)
+      : config.paradigm === 'DeepSeek-V3 MoE'
+        ? 1.75 // Multi-Token Prediction (MTP) speculative decode + 8/256 sparsity
+        : config.paradigm === 'Hybrid Mamba-Transformer'
+          ? 1.32
+          : config.paradigm === 'Sparse MoE'
+            ? 1.18
+            : 1.0;
   const attnSpeedBoost =
     config.attention === 'MLA' ? 1.22 : config.attention === 'GQA' ? 1.08 : 0.88;
   const bwFactor = gpu.bandwidthTBps / 3.35;
@@ -580,7 +592,7 @@ export function calculateHardwareAndEconomics(
     Math.min(850, Math.max(18, baseTokPerSec))
   );
 
-  // TTFT latency (seconds)
+  // TTFT latency (seconds) - Asymmetric Causal Encoder processes prompts with only 8B active parameters
   const effortTtftAdd: Record<RlvrEffortType, number> = {
     Low: 0.0,
     Medium: 0.22,
@@ -588,11 +600,13 @@ export function calculateHardwareAndEconomics(
     Xhigh: 0.92,
     Max: 1.45,
   };
+  const prefillActiveParams =
+    config.paradigm === 'DeepSeek-V4.1 Flash' ? Math.min(activeParamsB, 8) : activeParamsB;
   const predictedTtftSec = Number(
     Math.max(
-      0.18,
-      0.22 +
-      (activeParamsB / 450) * 0.55 +
+      0.15,
+      (config.paradigm === 'DeepSeek-V4.1 Flash' ? 0.16 : 0.22) +
+      (prefillActiveParams / 450) * 0.55 +
       (config.contextWindowK / 2000) * 0.18 * attnMemoryFactor +
       effortTtftAdd[config.rlvrEffort]
     ).toFixed(2)
@@ -606,6 +620,7 @@ export function calculateHardwareAndEconomics(
   if (config.precision === 'Ternary 1.58b') stability += 2; // Weight clipping & sign gradients prevent exploding activations
   if (config.precision === 'Bonsai 1-bit') stability -= 6;
   if (config.paradigm === 'Sparse MoE') stability -= 5;
+  if (config.paradigm === 'DeepSeek-V4.1 Flash') stability += 4; // SWA Bounded Replay + Auxiliary-loss-free balancing
   if (config.paradigm === 'DeepSeek-V3 MoE') stability += 3; // Auxiliary-loss-free load balancing prevents routing collapse
   if (config.optimizer === 'Muon') stability += 4;
   const stabilityScore = Math.min(99, Math.max(42, stability));
