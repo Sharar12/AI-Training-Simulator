@@ -131,45 +131,48 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
   }, [progress, econ.predictedIntelligenceIndex, econ.mfuPct, econ.powerMegawatts, config.decontaminationFilter]);
 
   useEffect(() => {
-    if (!isRunning || activeAlert) return;
-    if (progress >= 100) {
-      setIsRunning(false);
-      return;
-    }
+    if (!isRunning || activeAlert || progress >= 100) return;
 
     const intervalMs = simSpeed === 1 ? 220 : simSpeed === 5 ? 70 : 25;
     const timer = setInterval(() => {
       setProgress((prev) => {
-        const next = Math.min(100, prev + 2);
-        // Check if an event triggers at this step
-        const triggered = TRAINING_EVENTS.find(
-          (ev) => next >= ev.stepPct && !resolvedEvents.includes(ev.id)
-        );
-        if (triggered) {
-          if (autoMitigate) {
-            setResolvedEvents((r) => [...r, triggered.id]);
-            onUpdateEventBonus(triggered.options[0].indexDelta);
-            setLogs((l) => [
-              ...l,
-              `[${next}%] Auto-Mitigated: ${triggered.title} -> ${triggered.options[0].label}`,
-            ]);
-          } else {
-            setActiveAlert(triggered);
-            setIsRunning(false);
-          }
-        }
-        if (next === 100) {
-          setLogs((l) => [
-            ...l,
-            '[100%] Multi-stage training & RLVR verification converged. Ready for evaluation.',
-          ]);
-        }
-        return next;
+        if (prev >= 100) return 100;
+        return Math.min(100, prev + 2);
       });
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isRunning, progress, simSpeed, autoMitigate, activeAlert, resolvedEvents, onUpdateEventBonus]);
+  }, [isRunning, activeAlert, progress >= 100, simSpeed]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+
+    // Check if an event triggers at this step
+    const triggered = TRAINING_EVENTS.find(
+      (ev) => progress >= ev.stepPct && !resolvedEvents.includes(ev.id)
+    );
+    if (triggered) {
+      if (autoMitigate) {
+        setResolvedEvents((r) => [...r, triggered.id]);
+        onUpdateEventBonus(triggered.options[0].indexDelta);
+        setLogs((l) => [
+          ...l,
+          `[${progress}%] Auto-Mitigated: ${triggered.title} -> ${triggered.options[0].label}`,
+        ]);
+      } else {
+        setActiveAlert(triggered);
+        setIsRunning(false);
+      }
+    }
+
+    if (progress >= 100) {
+      setIsRunning(false);
+      setLogs((l) => [
+        ...l,
+        '[100%] Multi-stage training & RLVR verification converged. Ready for evaluation.',
+      ]);
+    }
+  }, [progress, isRunning, autoMitigate, resolvedEvents, onUpdateEventBonus]);
 
   const handleRestartSimulation = () => {
     setProgress(0);
