@@ -54,11 +54,18 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
     config.domainMixture,
     config.totalTokensT
   );
+
   const [progress, setProgress] = useState<number>(100);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [simSpeed, setSimSpeed] = useState<1 | 5 | 20>(5);
   const [autoMitigate, setAutoMitigate] = useState<boolean>(true);
   const [activeAlert, setActiveAlert] = useState<TrainingEventAlert | null>(null);
+
+  // Exact partition token volumes based on user split settings:
+  const trainTokensT = Number(((activeTokensT * config.trainSplitPct) / 100).toFixed(2));
+  const valTokensT = Number(((activeTokensT * config.valSplitPct) / 100).toFixed(2));
+  const testTokensT = Number(((activeTokensT * config.testSplitPct) / 100).toFixed(2));
+  const ingestedTrainTokensT = Number(((trainTokensT * progress) / 100).toFixed(2));
   const [resolvedEvents, setResolvedEvents] = useState<string[]>([
     'grad-spike-28',
     'math-plateau-62',
@@ -73,10 +80,19 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
   // Generate telemetry curve points up to current `progress`
   const telemetryData: TelemetryPoint[] = useMemo(() => {
     const points: TelemetryPoint[] = [];
-    const targetFinalLoss = Math.max(
+    const baseTargetLoss = Math.max(
       1.05,
       2.65 - (econ.predictedIntelligenceIndex - 30) * 0.038
     );
+    // Chinchilla Data Deficit penalty: Withholding training data into Val/Test (e.g. 50% vs standard 96% baseline)
+    // deprives the optimizer of training gradient steps, raising the asymptotic pre-training loss
+    const splitPenalty = Math.max(0, (96 - config.trainSplitPct) * 0.0035);
+    const targetFinalLoss = baseTargetLoss + splitPenalty;
+
+    // Held-out validation sample size dampening:
+    // With large validation sets (e.g. 25% = 1.75T tokens), variance on validation loss is virtually zero
+    const sampleVarianceDamping = Math.min(1.0, 5 / Math.max(1, config.valSplitPct));
+
     const maxStep = Math.max(2, progress);
     for (let s = 0; s <= maxStep; s += 2) {
       const t = s / 100;
@@ -96,14 +112,14 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
       );
       const valGap = config.decontaminationFilter ? 0.065 : -0.03; // Unfiltered leaks test set!
       const valLoss = Number(
-        (trainLoss + valGap + 0.015 * Math.cos(s * 0.3)).toFixed(3)
+        (trainLoss + valGap + 0.015 * Math.cos(s * 0.3) * sampleVarianceDamping).toFixed(3)
       );
       const testLoss = Number(
         (
           trainLoss +
           0.085 +
           (config.decontaminationFilter ? 0.0 : 0.14) +
-          0.012 * Math.sin(s * 0.25)
+          0.012 * Math.sin(s * 0.25) * sampleVarianceDamping
         ).toFixed(3)
       );
       const gradNorm = Number(
@@ -128,7 +144,15 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
       });
     }
     return points;
-  }, [progress, econ.predictedIntelligenceIndex, econ.mfuPct, econ.powerMegawatts, config.decontaminationFilter]);
+  }, [
+    progress,
+    econ.predictedIntelligenceIndex,
+    econ.mfuPct,
+    econ.powerMegawatts,
+    config.decontaminationFilter,
+    config.trainSplitPct,
+    config.valSplitPct,
+  ]);
 
   useEffect(() => {
     if (!isRunning || activeAlert || progress >= 100) return;
@@ -450,21 +474,52 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
               </h3>
               <p className="text-[11px] font-mono text-slate-400">
                 Active Stage: <strong className="text-cyan-300">{currentPoint.stage}</strong> • Progress:{' '}
-                <strong className="text-white">{progress}%</strong> ({((activeTokensT * progress) / 100).toFixed(2)}T /{' '}
-                {activeTokensT}T Tokens)
+                <strong className="text-white">{progress}%</strong> ({ingestedTrainTokensT}T /{' '}
+                {trainTokensT}T Train Tokens Ingested)
               </p>
             </div>
 
-            <div className="flex items-center gap-3 font-mono text-xs">
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-cyan-300">
-                Train: <strong>{currentPoint.trainLoss.toFixed(3)}</strong>
+            <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.15)]">
+                Train ({config.trainSplitPct}% • {trainTokensT}T): <strong>{currentPoint.trainLoss.toFixed(3)}</strong>
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-emerald-300">
-                Val: <strong>{currentPoint.valLoss.toFixed(3)}</strong>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.15)]">
+                Val ({config.valSplitPct}% • {valTokensT}T): <strong>{currentPoint.valLoss.toFixed(3)}</strong>
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-amber-300">
-                Test: <strong>{currentPoint.testLoss.toFixed(3)}</strong>
+              <span className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/40 text-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.15)]">
+                Test ({config.testSplitPct}% • {testTokensT}T): <strong>{currentPoint.testLoss.toFixed(3)}</strong>
               </span>
+            </div>
+          </div>
+
+          {/* Segmented Corpus Partitioning Bar in Live HUD */}
+          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5 font-mono text-[11px]">
+            <div className="flex flex-wrap items-center justify-between text-slate-400 gap-1">
+              <span className="font-semibold text-slate-300">
+                Master Corpus Partitioning ({activeTokensT.toFixed(2)}T NVMe Storage):
+              </span>
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className="text-cyan-300 font-semibold">● Train: {config.trainSplitPct}% ({trainTokensT}T)</span>
+                <span className="text-emerald-300 font-semibold">● Validation: {config.valSplitPct}% ({valTokensT}T)</span>
+                <span className="text-amber-300 font-semibold">● Held-Out Test: {config.testSplitPct}% ({testTokensT}T)</span>
+              </div>
+            </div>
+            <div className="w-full h-2 rounded-full overflow-hidden flex bg-slate-900 border border-slate-800">
+              <div
+                style={{ width: `${Math.min(100, config.trainSplitPct)}%` }}
+                title={`Training: ${config.trainSplitPct}% (${trainTokensT}T tokens)`}
+                className="bg-cyan-400 h-full rounded-l-full transition-all"
+              />
+              <div
+                style={{ width: `${Math.min(100, config.valSplitPct)}%` }}
+                title={`Validation: ${config.valSplitPct}% (${valTokensT}T tokens)`}
+                className="bg-emerald-400 h-full transition-all"
+              />
+              <div
+                style={{ width: `${Math.min(100, config.testSplitPct)}%` }}
+                title={`Test: ${config.testSplitPct}% (${testTokensT}T tokens)`}
+                className="bg-amber-400 h-full rounded-r-full transition-all"
+              />
             </div>
           </div>
 
@@ -566,7 +621,7 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
         <div className="lg:col-span-4 space-y-5">
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <h3 className="text-xs font-bold text-white font-mono uppercase tracking-wider border-b border-slate-800 pb-2.5">
-              Per-Category Token Ingestion ({((activeTokensT * progress) / 100).toFixed(2)}T Ingested)
+              Per-Category Token Ingestion ({ingestedTrainTokensT}T / {trainTokensT}T Trained)
             </h3>
 
             <div className="space-y-2.5 font-mono text-xs">
@@ -579,14 +634,18 @@ export const Module3LiveTraining: React.FC<Module3LiveTrainingProps> = ({
                 { label: 'Multilingual', tok: dTokens.multilingual, pct: dPcts.multilingual, cls: 'bg-pink-400' },
                 { label: 'Multimodal', tok: dTokens.multimodal, pct: dPcts.multimodal, cls: 'bg-indigo-400' },
               ].map((cat) => {
-                const ingestedT = ((cat.tok * progress) / 100).toFixed(2);
-                const totalCatT = cat.tok.toFixed(2);
+                const catTrainTokens = cat.tok * (config.trainSplitPct / 100);
+                const ingestedT = ((catTrainTokens * progress) / 100).toFixed(2);
+                const totalCatT = catTrainTokens.toFixed(2);
                 return (
                   <div key={cat.label}>
                     <div className="flex justify-between text-[11px] mb-1">
                       <span className="text-slate-300">{cat.label} ({cat.pct}%)</span>
                       <span className="text-slate-200 font-bold">
                         {ingestedT}T / {totalCatT}T
+                        <span className="text-[10px] text-slate-500 font-normal ml-1">
+                          ({config.trainSplitPct}%)
+                        </span>
                       </span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-slate-950 overflow-hidden">
