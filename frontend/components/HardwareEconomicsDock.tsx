@@ -73,6 +73,21 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
 
         <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
           <div>
+            <span className="text-slate-400">Model: </span>
+            <span className="text-white font-bold">
+              {econ.totalParamsB >= 1000
+                ? `${(econ.totalParamsB / 1000).toFixed(1)}T`
+                : `${econ.totalParamsB}B`}
+              {econ.activeParamsB < econ.totalParamsB ? (
+                <span className="text-cyan-400 font-normal ml-1">
+                  ({econ.activeParamsB}B active)
+                </span>
+              ) : (
+                <span className="text-slate-400 font-normal ml-1">(Dense)</span>
+              )}
+            </span>
+          </div>
+          <div>
             <span className="text-slate-400">Build Total: </span>
             <span className="text-emerald-400 font-bold">
               {formatMoney(econ.grandTotalBuildCostUSD)}
@@ -202,6 +217,13 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
               </div>
               <div className="space-y-1.5 font-mono text-[11px]">
                 <div className="flex justify-between">
+                  <span className="text-slate-400">Total Model Parameters:</span>
+                  <span className="text-cyan-300 font-bold">
+                    {econ.totalParamsB >= 1000 ? `${(econ.totalParamsB / 1000).toFixed(1)}T` : `${econ.totalParamsB}B`}
+                    {econ.activeParamsB < econ.totalParamsB ? ` (${econ.activeParamsB}B active)` : ' (Dense)'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-slate-400">Training VRAM Required:</span>
                   <span className="text-cyan-200 font-semibold">
                     {formatMemoryGB(econ.trainingVramGB)}
@@ -231,7 +253,7 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
             </div>
             <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
               <span>
-                State: {econ.weightBytesPerParam}B Wt + {econ.gradBytesPerParam}B Grad + {econ.optBytesPerParam}B Opt
+                State: {econ.weightBytesPerParam}B Wt + {econ.gradBytesPerParam}B Grad + {econ.optBytesPerParam}B Opt (Bytes/param)
               </span>
               <span>Act Buf: {Math.round(econ.activationBufferGB)} GB</span>
             </div>
@@ -250,6 +272,12 @@ export const HardwareEconomicsDock: React.FC<HardwareEconomicsDockProps> = ({
                 </span>
               </div>
               <div className="space-y-1.5 font-mono text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Model Scale:</span>
+                  <span className="text-amber-300 font-bold">
+                    {econ.totalParamsB >= 1000 ? `${(econ.totalParamsB / 1000).toFixed(1)}T` : `${econ.totalParamsB}B`} ({config.paradigm})
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Inference VRAM (1.15x + KV):</span>
                   <span className="text-amber-200 font-semibold">
